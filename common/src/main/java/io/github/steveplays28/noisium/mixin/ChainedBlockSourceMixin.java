@@ -26,7 +26,8 @@ public abstract class ChainedBlockSourceMixin {
 	@Nullable
 	@SuppressWarnings("ForLoopReplaceableByForEach")
 	public BlockState sample(DensityFunction.NoisePos pos) {
-		for (int i = 0; i < this.samplers.size(); i++) {
+		final int size = this.samplers.size();
+		for (int i = 0; i < size; i++) {
 			BlockState blockState = this.samplers.get(i).sample(pos);
 			if (blockState == null) {
 				continue;

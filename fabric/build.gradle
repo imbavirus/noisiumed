@@ -5,12 +5,14 @@ plugins {
     id "com.github.johnrengelman.shadow" version "${shadow_plugin_version}"
 }
 
-def archivesNameFabric = "${rootProject.archives_base_name}-fabric"
+def archivesNameFabric = "${rootProject.archives_base_name}"
 
 architectury {
     platformSetupLoomIde()
     fabric()
 }
+
+version = "${rootProject.mod_version}-fabric-${rootProject.minecraft_version}"
 
 base {
     archivesName = archivesNameFabric

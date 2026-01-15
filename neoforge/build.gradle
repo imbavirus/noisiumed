@@ -5,12 +5,14 @@ plugins {
     id "com.github.johnrengelman.shadow" version "${shadow_plugin_version}"
 }
 
-def archivesNameNeoForge = "${rootProject.archives_base_name}-neoforge"
+def archivesNameNeoForge = "${rootProject.archives_base_name}"
 
 architectury {
     platformSetupLoomIde()
     neoForge()
 }
+
+version = "${rootProject.mod_version}-neoforge-${rootProject.minecraft_version}"
 
 base {
     archivesName = archivesNameNeoForge
