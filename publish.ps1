@@ -295,8 +295,8 @@ function Build-Mod() {
 }
 
 function Find-BuildArtifacts() {
-  # Find JAR files in build/libs directory
-  $libsDir = "build/libs"
+  # Find JAR files in neoforge/build/libs directory
+  $libsDir = "neoforge/build/libs"
   if (-not (Test-Path $libsDir)) {
     throw "Build directory not found: $libsDir (build may have failed)"
   }
