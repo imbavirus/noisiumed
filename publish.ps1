@@ -1,20 +1,22 @@
 <#
 .SYNOPSIS
-  Build + publish Noisiumed mod to GitHub, with SemVer bump, git commit + tag + push.
+  Build + publish Fairy Lights mod to GitHub, with SemVer bump, git commit + tag + push.
 
 .DESCRIPTION
-  - Requires a clean git working tree before starting (unless using -OnlyCurseForge or -SkipBuild).
+  - Requires a clean git working tree before starting (unless using -OnlyCurseForge, -OnlyModrinth, or -SkipBuild).
   - Bumps version (default: patch, i.e. +0.0.1).
   - Updates:
       - gradle.properties (mod_version)
   - Commits, tags vX.Y.Z, pushes branch + tag to origin.
-  - Builds the mod using Gradle (unless -SkipBuild or -OnlyCurseForge is used).
+  - Builds the mod using Gradle (unless -SkipBuild, -OnlyCurseForge, or -OnlyModrinth is used).
   - Creates a GitHub release and uploads JAR artifacts.
   - Optionally uploads the main JAR to CurseForge if env vars are set.
+  - Optionally uploads the main JAR to Modrinth if env vars are set.
   
   Special modes:
     - -OnlyGit: Only perform git operations (commit, tag, push), skip build and uploads.
     - -OnlyCurseForge: Only upload to CurseForge using existing JARs, skip git operations and build.
+    - -OnlyModrinth: Only upload to Modrinth using existing JARs, skip git operations and build.
     - -SkipBuild: Use existing JARs from build/libs without building.
 
   CurseForge env vars (optional):
@@ -32,6 +34,17 @@
     - CF_CHANGELOG_FILE: optional path to a changelog file (markdown/text)
         - If not set, automatically looks for changelogs/{version}.md (e.g., changelogs/3.0.1.md)
     - CF_BASE_URL: optional base URL for the upload API (default: https://minecraft.curseforge.com)
+
+  Modrinth env vars (optional):
+    - MODRINTH_PROJECT_ID (or MR_PROJECT_ID / MODRINTH_PROJECT)
+    - MODRINTH_TOKEN (or MR_TOKEN / MODRINTH_API_TOKEN)
+    - MODRINTH_GAME_VERSIONS: comma-separated Minecraft versions (e.g., "1.21.1")
+        - If omitted, the script attempts to auto-detect from minecraft_version in gradle.properties.
+    - MODRINTH_LOADERS: comma-separated mod loaders (e.g., "neoforge", "forge", "fabric")
+        - If omitted, the script attempts to auto-detect "neoforge" based on the project.
+    - MODRINTH_RELEASE_TYPE: release | beta | alpha (default: release)
+    - MODRINTH_CHANGELOG_FILE: optional path to a changelog file (markdown/text)
+        - If not set, automatically looks for changelogs/{version}.md (e.g., changelogs/3.0.1.md)
 
 .PARAMETER Bump
   patch | minor | major
@@ -51,7 +64,7 @@
   If omitted, uses $env:GITHUB_TOKEN.
 
 .PARAMETER GitHubRepo
-  GitHub repository in format "owner/repo" (e.g., "username/mekanism-elements").
+  GitHub repository in format "owner/repo" (e.g., "username/fairy-lights").
   If omitted, tries to detect from git remote.
 
 .EXAMPLE
@@ -70,6 +83,10 @@
 .EXAMPLE
   pwsh ./publish.ps1 -OnlyCurseForge
   # Only upload to CurseForge using existing JARs (skip git operations and build)
+
+.EXAMPLE
+  pwsh ./publish.ps1 -OnlyModrinth
+  # Only upload to Modrinth using existing JARs (skip git operations and build)
 #>
 
 [CmdletBinding()]
@@ -92,11 +109,17 @@ param(
   # If set, skip CurseForge upload even if env vars are present.
   [switch]$SkipCurseForge,
 
+  # If set, skip Modrinth upload even if env vars are present.
+  [switch]$SkipModrinth,
+
   # If set, only perform git operations (commit, tag, push) and skip build/upload.
   [switch]$OnlyGit,
 
   # If set, only upload to CurseForge using existing JARs (skip git operations and build).
   [switch]$OnlyCurseForge,
+
+  # If set, only upload to Modrinth using existing JARs (skip git operations and build).
+  [switch]$OnlyModrinth,
 
   # If set, skip building and use existing JARs from build/libs.
   [switch]$SkipBuild
@@ -295,16 +318,20 @@ function Build-Mod() {
 }
 
 function Find-BuildArtifacts() {
-  # Find JAR files in neoforge/build/libs directory
+  # Find JAR files in neoforge/build/libs directory (the correct mod jar location)
   $libsDir = "neoforge/build/libs"
   if (-not (Test-Path $libsDir)) {
     throw "Build directory not found: $libsDir (build may have failed)"
   }
   
-  # Find all JAR files, but exclude sources and javadoc JARs
+  # Find all JAR files, but exclude sources, javadoc, dev-shadow, and transformProduction JARs
+  # This matches the pattern used in GitHub Actions workflows
   $artifacts = Get-ChildItem -Path $libsDir -Filter "*.jar" | Where-Object {
     $name = $_.Name
-    -not $name.Contains("-sources") -and -not $name.Contains("-javadoc")
+    -not $name.Contains("-sources") -and 
+    -not $name.Contains("-javadoc") -and 
+    -not $name.Contains("-dev-shadow") -and 
+    -not $name.Contains("transformProduction")
   }
   
   if ($artifacts.Count -eq 0) {
@@ -621,6 +648,225 @@ function Upload-ToCurseForge([string]$version, [array]$artifacts) {
     if ($respBody) {
       Write-Host "  Response: $respBody"
     }
+  }   finally {
+    $fileStream.Close()
+    $multipart.Dispose()
+    $client.Dispose()
+  }
+}
+
+function Get-ModrinthConfig() {
+  $projectId = Get-EnvAny @("MODRINTH_PROJECT_ID", "MR_PROJECT_ID", "MODRINTH_PROJECT")
+  $token = Get-EnvAny @("MODRINTH_TOKEN", "MR_TOKEN", "MODRINTH_API_TOKEN")
+  $baseUrl = "https://api.modrinth.com"
+
+  # Clean up token: trim whitespace and remove any control characters
+  if ($token) {
+    $token = $token.Trim()
+    $token = $token -replace "[\r\n\t]", ""
+    if (($token.StartsWith('"') -and $token.EndsWith('"')) -or ($token.StartsWith("'") -and $token.EndsWith("'"))) {
+      $token = $token.Substring(1, $token.Length - 2)
+    }
+  }
+
+  return @{
+    ProjectId = $projectId
+    Token = $token
+    BaseUrl = $baseUrl
+    ReleaseType = (Get-EnvAny @("MODRINTH_RELEASE_TYPE"))
+    GameVersionsRaw = (Get-EnvAny @("MODRINTH_GAME_VERSIONS"))
+    LoadersRaw = (Get-EnvAny @("MODRINTH_LOADERS"))
+    ChangelogFile = (Get-EnvAny @("MODRINTH_CHANGELOG_FILE"))
+  }
+}
+
+function Resolve-ModrinthGameVersions([hashtable]$mr, [string]$minecraftVersion) {
+  # Prefer explicit versions if user supplied them.
+  if (-not [string]::IsNullOrWhiteSpace($mr.GameVersionsRaw)) {
+    $versions = @()
+    foreach ($part in ($mr.GameVersionsRaw -split "[,;\s]+" | Where-Object { $_ })) {
+      $t = $part.Trim()
+      if ($t) {
+        $versions += $t
+      }
+    }
+    if ($versions.Count -eq 0) { throw "MODRINTH_GAME_VERSIONS was provided but no versions could be parsed." }
+    return $versions
+  }
+
+  # Auto-detect from gradle.properties - ensure it's always an array
+  return @($minecraftVersion)
+}
+
+function Resolve-ModrinthLoaders([hashtable]$mr) {
+  # Prefer explicit loaders if user supplied them.
+  if (-not [string]::IsNullOrWhiteSpace($mr.LoadersRaw)) {
+    $loaders = @()
+    foreach ($part in ($mr.LoadersRaw -split "[,;\s]+" | Where-Object { $_ })) {
+      $t = $part.Trim().ToLowerInvariant()
+      if ($t) {
+        $loaders += $t
+      }
+    }
+    if ($loaders.Count -eq 0) { throw "MODRINTH_LOADERS was provided but no loaders could be parsed." }
+    return $loaders
+  }
+
+  # Auto-detect: this project uses NeoForge
+  return @("neoforge")
+}
+
+function Upload-ToModrinth([string]$version, [array]$artifacts) {
+  $mr = Get-ModrinthConfig
+
+  if ($script:SkipModrinth) {
+    Write-Host "Modrinth upload skipped (-SkipModrinth)."
+    return
+  }
+
+  if (-not $mr.ProjectId -or -not $mr.Token) {
+    Write-Host "Modrinth upload not configured (missing MODRINTH_PROJECT_ID and/or MODRINTH_TOKEN). Skipping."
+    return
+  }
+
+  # Validate token format
+  if ([string]::IsNullOrWhiteSpace($mr.Token)) {
+    throw "MODRINTH_TOKEN is empty or whitespace-only. Please check your .env file or environment variable."
+  }
+
+  # Clean token
+  if ($mr.Token -match '[\r\n]') {
+    $tokenPreview = if ($mr.Token.Length -gt 20) { $mr.Token.Substring(0, 20) + "..." } else { $mr.Token }
+    $tokenLength = $mr.Token.Length
+    throw "MODRINTH_TOKEN appears to contain newlines or carriage returns (length: $tokenLength, starts with: '$tokenPreview'). In your .env file, ensure the token is on a single line."
+  }
+
+  if ($mr.Token.Length -lt 10) {
+    throw "MODRINTH_TOKEN appears too short (length: $($mr.Token.Length)). Please verify your token is correct."
+  }
+
+  $tokenPreview = if ($mr.Token.Length -gt 10) { $mr.Token.Substring(0, 10) + "..." } else { "***" }
+  Write-Host "Using Modrinth API token (length: $($mr.Token.Length), starts with: $tokenPreview)"
+
+  # Get Minecraft version from gradle.properties
+  $gp = Get-Content -Path "gradle.properties"
+  $mcLine = $gp | Where-Object { $_ -match '^minecraft_version=(.+)$' } | Select-Object -First 1
+  $mcVersion = if ($mcLine -and ($mcLine -match '^minecraft_version=(.+)$')) { $Matches[1].Trim() } else { $null }
+
+  if (-not $mcVersion) {
+    throw "Could not read minecraft_version from gradle.properties (required for Modrinth auto-resolution)."
+  }
+
+  $gameVersions = Resolve-ModrinthGameVersions $mr $mcVersion
+  $loaders = Resolve-ModrinthLoaders $mr
+
+  $releaseType = if ($mr.ReleaseType) { $mr.ReleaseType.Trim().ToLowerInvariant() } else { "release" }
+  if ($releaseType -notin @("release", "beta", "alpha")) {
+    throw "Invalid MODRINTH_RELEASE_TYPE '$releaseType'. Expected: release | beta | alpha"
+  }
+
+  $artifact = Pick-MainArtifact $artifacts
+  $filePath = $artifact.FullName
+  $fileName = $artifact.Name
+
+  $changelog = $null
+  # Priority: 1) Explicit MODRINTH_CHANGELOG_FILE, 2) Auto-detect changelogs/{version}.md, 3) Note parameter, 4) Default
+  if ($mr.ChangelogFile -and (Test-Path $mr.ChangelogFile)) {
+    $changelog = Get-Content -Path $mr.ChangelogFile -Raw
+    Write-Host "Using changelog from MODRINTH_CHANGELOG_FILE: $($mr.ChangelogFile)"
+  } else {
+    # Auto-detect changelog from changelogs/{version}.md
+    $autoChangelogPath = "changelogs/$version.md"
+    if (Test-Path $autoChangelogPath) {
+      $changelog = Get-Content -Path $autoChangelogPath -Raw
+      Write-Host "Using auto-detected changelog: $autoChangelogPath"
+    } elseif ($script:Note) {
+      $changelog = $script:Note
+      Write-Host "Using changelog from -Note parameter"
+    } else {
+      $changelog = "Release v$version"
+      Write-Host "Using default changelog message"
+    }
+  }
+
+  # Build metadata per Modrinth API v2
+  # Note: project_id is included in the metadata, not the URL
+  # Ensure game_versions and loaders are always arrays (not single strings)
+  # PowerShell's ConvertTo-Json can serialize single-element arrays as strings, so we need to force array type
+  $gameVersionsArray = [string[]]@(if ($gameVersions -is [array]) { $gameVersions } else { $gameVersions })
+  $loadersArray = [string[]]@(if ($loaders -is [array]) { $loaders } else { $loaders })
+  
+  $metadata = @{
+    name = "v$version"
+    version_number = $version
+    changelog = $changelog
+    dependencies = @()
+    game_versions = $gameVersionsArray
+    loaders = $loadersArray
+    release_channel = $releaseType
+    featured = $false
+    project_id = $mr.ProjectId
+    file_parts = @($fileName)
+  }
+
+  # Convert to JSON, ensuring arrays are always arrays
+  # PowerShell's ConvertTo-Json can serialize single-element arrays as strings
+  # Fix by replacing string values with array syntax in JSON
+  $metadataJson = $metadata | ConvertTo-Json -Compress -Depth 10
+  
+  # Fix game_versions: replace "game_versions":"value" with "game_versions":["value"]
+  $metadataJson = $metadataJson -replace '("game_versions"\s*:\s*)"([^"]+)"', '$1["$2"]'
+  
+  # Fix loaders: replace "loaders":"value" with "loaders":["value"]  
+  $metadataJson = $metadataJson -replace '("loaders"\s*:\s*)"([^"]+)"', '$1["$2"]'
+  
+  # Fix file_parts: replace "file_parts":"value" with "file_parts":["value"]
+  $metadataJson = $metadataJson -replace '("file_parts"\s*:\s*)"([^"]+)"', '$1["$2"]'
+
+  $uploadUri = "$($mr.BaseUrl)/v2/version"
+  Write-Host "Uploading to Modrinth project $($mr.ProjectId)..."
+  Write-Host "  URL: $uploadUri"
+  Write-Host "  File: $fileName"
+  Write-Host "  Game Versions: $($gameVersions -join ',')"
+  Write-Host "  Loaders: $($loaders -join ',')"
+  Write-Host "  Release Type: $releaseType"
+
+  Add-Type -AssemblyName System.Net.Http
+  $client = New-Object System.Net.Http.HttpClient
+  # Modrinth uses "Authorization: <token>" header format
+  $client.DefaultRequestHeaders.Add("Authorization", $mr.Token)
+
+  $multipart = New-Object System.Net.Http.MultipartFormDataContent
+  
+  # Modrinth API v2 expects "data" field with JSON metadata
+  $metaContent = New-Object System.Net.Http.StringContent($metadataJson, [System.Text.Encoding]::UTF8, "application/json")
+  $multipart.Add($metaContent, "data")
+
+  $fileStream = [System.IO.File]::OpenRead($filePath)
+  try {
+    $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
+    $fileContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("application/java-archive")
+    $multipart.Add($fileContent, "file", $fileName)
+
+    $resp = $client.PostAsync($uploadUri, $multipart).Result
+    $respBody = $resp.Content.ReadAsStringAsync().Result
+    if (-not $resp.IsSuccessStatusCode) {
+      throw "Modrinth upload failed: $([int]$resp.StatusCode) $($resp.ReasonPhrase)`n$respBody"
+    }
+
+    Write-Host "  [OK] Uploaded to Modrinth."
+    if ($respBody) {
+      try {
+        $responseObj = $respBody | ConvertFrom-Json
+        if ($responseObj.id) {
+          Write-Host "  Version ID: $($responseObj.id)"
+          Write-Host "  Version URL: https://modrinth.com/mod/$($mr.ProjectId)/version/$($responseObj.version_number)"
+        }
+      } catch {
+        # Ignore JSON parse errors, just show raw response
+        Write-Host "  Response: $respBody"
+      }
+    }
   } finally {
     $fileStream.Close()
     $multipart.Dispose()
@@ -858,11 +1104,20 @@ Import-DotEnvIfPresent ".env"
 if ($OnlyGit -and $OnlyCurseForge) {
   throw "Cannot use both -OnlyGit and -OnlyCurseForge. Choose one."
 }
+if ($OnlyGit -and $OnlyModrinth) {
+  throw "Cannot use both -OnlyGit and -OnlyModrinth. Choose one."
+}
+if ($OnlyCurseForge -and $OnlyModrinth) {
+  throw "Cannot use both -OnlyCurseForge and -OnlyModrinth. Choose one."
+}
 if ($OnlyGit -and $OnlyPublish) {
   throw "Cannot use both -OnlyGit and -OnlyPublish. Choose one."
 }
 if ($OnlyCurseForge -and $OnlyPublish) {
   throw "Cannot use both -OnlyCurseForge and -OnlyPublish. Choose one."
+}
+if ($OnlyModrinth -and $OnlyPublish) {
+  throw "Cannot use both -OnlyModrinth and -OnlyPublish. Choose one."
 }
 
 # Read current version
@@ -886,6 +1141,26 @@ if ($OnlyCurseForge) {
   
   Write-Host ""
   Write-Host "CurseForge upload complete!"
+  exit 0
+}
+
+# Handle -OnlyModrinth: skip git operations, use existing JARs
+if ($OnlyModrinth) {
+  Write-Host "OnlyModrinth mode: skipping git operations and build, using existing JARs"
+  $newVersion = $currentVersion
+  
+  # Find existing build artifacts
+  $artifacts = Find-BuildArtifacts
+  Write-Host "Found $($artifacts.Count) artifact(s):"
+  foreach ($artifact in $artifacts) {
+    Write-Host "  - $($artifact.Name)"
+  }
+  
+  # Upload to Modrinth only
+  Upload-ToModrinth $newVersion $artifacts
+  
+  Write-Host ""
+  Write-Host "Modrinth upload complete!"
   exit 0
 }
 
@@ -975,6 +1250,9 @@ Upload-ToGitHubRelease $newVersion $artifacts
 
 # Upload to CurseForge (optional, env-driven)
 Upload-ToCurseForge $newVersion $artifacts
+
+# Upload to Modrinth (optional, env-driven)
+Upload-ToModrinth $newVersion $artifacts
 
 Write-Host ""
 Write-Host "Publish complete!"
