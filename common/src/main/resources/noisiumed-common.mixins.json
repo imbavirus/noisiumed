@@ -1,9 +1,9 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "io.github.steveplays28.noisium.mixin",
+  "package": "za.co.infernos.noisiumed.mixin",
   "compatibilityLevel": "JAVA_21",
-  "plugin": "io.github.steveplays28.noisium.mixin.NoisiumMixinPlugin",
+  "plugin": "za.co.infernos.noisiumed.mixin.NoisiumMixinPlugin",
   "mixins": [
     "ChainedBlockSourceMixin",
     "ChunkSectionMixin",
@@ -11,8 +11,7 @@
     "NoiseChunkGeneratorMixin",
     "compat.lithium.LithiumNoiseChunkGeneratorMixin"
   ],
-  "client": [
-  ],
+  "client": [],
   "injectors": {
     "defaultRequire": 1
   }
