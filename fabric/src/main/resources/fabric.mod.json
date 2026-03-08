@@ -32,7 +32,7 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "io.github.steveplays28.noisium.fabric.NoisiumFabric"
+      "za.co.infernos.noisiumed.fabric.NoisiumFabric"
     ]
   },
   "mixins": [

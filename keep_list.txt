@@ -1,0 +1,10 @@
+README.md
+build.gradle
+changelogs/3.0.0.md
+changelogs/README.md
+common/src/main/resources/noisiumed-common.mixins.json
+fabric/build.gradle
+fabric/src/main/resources/fabric.mod.json
+gradle.properties
+neoforge/build.gradle
+neoforge/src/main/resources/META-INF/neoforge.mods.toml
