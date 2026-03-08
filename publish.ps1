@@ -231,16 +231,19 @@ function Update-GradleVersion([string]$gradlePropsPath, [string]$newVersion) {
 
 function Git-CommitTagPush([string]$newVersion) {
   $tag = "v$newVersion"
-  git add gradle.properties
+  # Only commit if there are changes
+  if (git status --porcelain gradle.properties) {
+    git add gradle.properties
+    git commit -m "chore(release): $tag"
+  }
 
-  git commit -m "chore(release): $tag"
-
-  # Ensure tag doesn't already exist
+  # Ensure tag doesn't already exist locally
   $existing = git tag -l $tag
   if ($existing) {
-    throw "Tag already exists: $tag"
+    Write-Host "Tag $tag already exists locally. Skipping local tag creation."
+  } else {
+    git tag $tag
   }
-  git tag $tag
 
   # Fetch latest from remote to see if we're behind
   Write-Host "Fetching latest from remote..."
@@ -294,11 +297,12 @@ function Git-CommitTagPush([string]$newVersion) {
 
   # Push tag (required for releases)
   Write-Host "Pushing tag $tag to origin..."
-  git push origin $tag
+  git push origin $tag 2>$null
   if ($LASTEXITCODE -ne 0) {
-    throw "Failed to push tag $tag to origin. This is required for releases."
+    Write-Warning "Failed to push tag $tag to origin. It likely already exists on remote and points elsewhere (which is expected in multi-branch publishing)."
+  } else {
+    Write-Host "Pushed tag $tag to origin"
   }
-  Write-Host "Pushed tag $tag to origin"
 
   return $tag
 }
@@ -317,7 +321,7 @@ function Build-Mod() {
   Write-Host "Build completed successfully"
 }
 
-function Find-BuildArtifacts() {
+function Find-BuildArtifacts([string]$targetVersion) {
   $loaders = @("neoforge", "fabric", "forge", "common") # "common" is usually just the shared code JAR, might be useful
   $foundArtifacts = @()
 
@@ -330,7 +334,8 @@ function Find-BuildArtifacts() {
         -not $name.Contains("-sources") -and 
         -not $name.Contains("-javadoc") -and 
         -not $name.Contains("-dev-shadow") -and 
-        -not $name.Contains("transformProduction")
+        -not $name.Contains("transformProduction") -and
+        ($name.Contains($targetVersion))
       }
       
       foreach ($art in $loaderArtifacts) {
@@ -1024,7 +1029,7 @@ if ($OnlyCurseForge) {
   $newVersion = $currentVersion
   
   # Find existing build artifacts
-  $artifacts = Find-BuildArtifacts
+  $artifacts = Find-BuildArtifacts $newVersion
   Write-Host "Found $($artifacts.Count) artifact(s):"
   foreach ($artifact in $artifacts) {
     Write-Host "  - $($artifact.Name)"
@@ -1044,7 +1049,7 @@ if ($OnlyModrinth) {
   $newVersion = $currentVersion
   
   # Find existing build artifacts
-  $artifacts = Find-BuildArtifacts
+  $artifacts = Find-BuildArtifacts $newVersion
   Write-Host "Found $($artifacts.Count) artifact(s):"
   foreach ($artifact in $artifacts) {
     Write-Host "  - $($artifact.Name)"
@@ -1133,7 +1138,7 @@ if (-not $SkipBuild) {
 }
 
 # Find build artifacts
-$artifacts = Find-BuildArtifacts
+$artifacts = Find-BuildArtifacts $newVersion
 Write-Host "Found $($artifacts.Count) artifact(s):"
 foreach ($artifact in $artifacts) {
   Write-Host "  - $($artifact.Name)"
