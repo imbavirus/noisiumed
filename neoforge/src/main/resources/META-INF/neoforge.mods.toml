@@ -1,18 +1,18 @@
 modLoader = "javafml"
 loaderVersion = ">=${neoforge_version}"
 license = "${mod_license}"
-issueTrackerURL = "https://github.com/Steveplays28/${mod_id}/issues"
+issueTrackerURL = "https://github.com/Infernos/${mod_id}/issues"
 
 [[mods]]
 modId = "${mod_id}"
 version = "${version}"
 displayName = "${mod_name}"
-authors = "Steveplays28"
+authors = "Infernos"
 description = '''
 ${mod_description}
 '''
 logoFile = "assets/${mod_namespace}/icon.png"
-displayURL = "https://github.com/Steveplays28/${mod_id}"
+displayURL = "https://github.com/Infernos/${mod_id}"
 
 [[mixins]]
 config = "${mod_id}-common.mixins.json"
