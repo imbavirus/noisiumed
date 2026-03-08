@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## `v3.0.3` - 2026-03-08
+
+### Changed
+
+- Renamed the project to **Noisiumed**
+- Moved the base package to `za.co.infernos.noisiumed`
+- Optimized performance by using array-based Mixins
+- Streamlined publishing with new automation scripts
+
 ## `v2.7.0` - 24/06/2025
 
 ### Added
