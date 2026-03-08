@@ -5,12 +5,12 @@
   "name": "${mod_name}",
   "description": "${mod_description}",
   "authors": [
-    "Steveplays28"
+    "Infernos"
   ],
   "contact": {
     "homepage": "https://modrinth.com/mod/${mod_id}",
-    "sources": "https://github.com/Steveplays28/${mod_id}",
-    "issues": "https://github.com/Steveplays28/${mod_id}/issues"
+    "sources": "https://github.com/Infernos/${mod_id}",
+    "issues": "https://github.com/Infernos/${mod_id}/issues"
   },
   "license": "${mod_license}",
   "icon": "assets/${mod_namespace}/icon.png",
@@ -32,7 +32,7 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "io.github.steveplays28.noisium.fabric.NoisiumFabric"
+      "za.co.infernos.noisiumed.fabric.NoisiumFabric"
     ]
   },
   "mixins": [
