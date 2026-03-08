@@ -443,7 +443,7 @@ function Resolve-CurseForgeGameVersionIds([hashtable]$cf, [string]$minecraftVers
 
     if ($loader -and $loader.id) { 
       $resolved += [int]$loader.id
-      Write-Host "Auto-resolved CurseForge loader ID for $cfLoaderSearch: $($loader.id)"
+      Write-Host "Auto-resolved CurseForge loader ID for ${cfLoaderSearch}: $($loader.id)"
     }
   }
 
