@@ -8,16 +8,12 @@ import net.minecraft.world.gen.StructureAccessor;
 import net.minecraft.world.gen.chunk.*;
 import net.minecraft.world.gen.noise.NoiseConfig;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 @Mixin(NoiseChunkGenerator.class)
 public abstract class NoiseChunkGeneratorMixin extends ChunkGenerator {
-	@Shadow
-	protected abstract Chunk populateNoise(Blender blender, StructureAccessor structureAccessor, NoiseConfig noiseConfig, Chunk chunk, int minimumCellY, int cellHeight);
-
 	public NoiseChunkGeneratorMixin(BiomeSource biomeSource) {
 		super(biomeSource);
 	}
@@ -45,36 +41,4 @@ public abstract class NoiseChunkGeneratorMixin extends ChunkGenerator {
 
 		return blockState;
 	}
-
-	/**
-	 * @author Steveplays28
-	 * @reason Improved chunk locking and unlocking speed by getting the chunk section array directly from the chunk
-	 * and by replacing {@code foreach} with {@code fori}.
-	 */
-	@Overwrite
-	public @Nullable Chunk method_38332(@NotNull Chunk chunk, int generationShapeHeightFloorDiv, @NotNull GenerationShapeConfig generationShapeConfig, int minimumY, @NotNull Blender blender, @NotNull StructureAccessor structureAccessor, @NotNull NoiseConfig noiseConfig, int minimumYFloorDiv) {
-		final int startingChunkSectionIndex = chunk.getSectionIndex(
-				generationShapeHeightFloorDiv * generationShapeConfig.verticalCellBlockCount() - 1 + minimumY);
-		final int minimumYChunkSectionIndex = chunk.getSectionIndex(minimumY);
-		// Get the chunk section array from the chunk directly instead of constructing it manually
-		@NotNull final var chunkSections = chunk.getSectionArray();
-		for (int chunkSectionIndex = startingChunkSectionIndex; chunkSectionIndex >= minimumYChunkSectionIndex; --chunkSectionIndex) {
-			chunkSections[chunkSectionIndex].lock();
-		}
-
-		@Nullable Chunk chunkWithNoise;
-		try {
-			chunkWithNoise = this.populateNoise(
-					blender, structureAccessor, noiseConfig, chunk, minimumYFloorDiv, generationShapeHeightFloorDiv);
-		} finally {
-			// Replace an enhanced for loop with a fori loop and reuse the chunk sections array used when locking the chunk sections
-			for (int chunkSectionIndex = startingChunkSectionIndex; chunkSectionIndex >= minimumYChunkSectionIndex; --chunkSectionIndex) {
-				chunkSections[chunkSectionIndex].unlock();
-			}
-		}
-
-		return chunkWithNoise;
-	}
 }
-
-
