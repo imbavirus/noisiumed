@@ -1,3 +1,3 @@
-### Added
+### Fixed
 
-- Minecraft 1.21.6 compatibility
+- Deployment fix for the new version
