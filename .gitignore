@@ -116,3 +116,6 @@ run/
 
 # Ignore environment variables/secrets
 .env
+
+# Publish output
+publish_output*.txt
