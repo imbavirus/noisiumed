@@ -117,9 +117,5 @@ run/
 # Ignore environment variables/secrets
 .env
 
-
-# Ignore text files
-*.txt
-
-# Ignore text files
-*.txt
+# Publish output
+publish_output*.txt
