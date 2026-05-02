@@ -551,18 +551,18 @@ function Upload-ToCurseForge([string]$version, [array]$artifacts) {
     $gameVersionIds = Resolve-CurseForgeGameVersionIds $cf $mcVersion @($artifact.Loader)
     
     $metadata = @{
-      changelog = $changelog
+      changelog = [string]$changelog
       changelogType = "markdown"
       displayName = $artifact.Name
       gameVersions = $gameVersionIds
       releaseType = $releaseType
     }
 
-    $metadataJson = $metadata | ConvertTo-Json -Compress
+    $metadataJson = $metadata | ConvertTo-Json -Compress -Depth 10
     $uploadUri = "$($cf.BaseUrl)/api/projects/$projectId/upload-file"
 
     Add-Type -AssemblyName System.Net.Http
-    $client = New-Object System.Net.Http.HttpClient
+    $client = New-Object System.Net.Http.HttpClient`n  $client.Timeout = [System.TimeSpan]::FromSeconds(120)
     $client.DefaultRequestHeaders.Add("X-Api-Token", $cf.Token)
 
     $multipart = New-Object System.Net.Http.MultipartFormDataContent
@@ -722,7 +722,7 @@ function Upload-ToModrinth([string]$version, [array]$artifacts) {
   $metadata = @{
     name = "v$version"
     version_number = $version
-    changelog = $changelog
+    changelog = [string]$changelog
     dependencies = @()
     game_versions = $gameVersionsArray
     loaders = $loadersArray
@@ -741,7 +741,7 @@ function Upload-ToModrinth([string]$version, [array]$artifacts) {
   $uploadUri = "$($mr.BaseUrl)/v2/version"
   
   Add-Type -AssemblyName System.Net.Http
-  $client = New-Object System.Net.Http.HttpClient
+  $client = New-Object System.Net.Http.HttpClient`n  $client.Timeout = [System.TimeSpan]::FromSeconds(120)
   $client.DefaultRequestHeaders.Add("Authorization", $mr.Token)
 
   $multipart = New-Object System.Net.Http.MultipartFormDataContent
@@ -859,7 +859,7 @@ function Upload-ToGitHubRelease([string]$version, [array]$artifacts) {
       body = $releaseDescription
       draft = $false
       prerelease = $false
-    } | ConvertTo-Json -Compress
+    } | ConvertTo-Json -Compress -Depth 10
     
     $releaseResponse = Invoke-RestMethod -Uri "$releaseUrl/$($existingRelease.id)" -Method Patch -Headers $headers -Body $releaseBody -ErrorAction Stop
     Write-Host "Updated existing release: $tag"
@@ -876,7 +876,7 @@ function Upload-ToGitHubRelease([string]$version, [array]$artifacts) {
       body = $releaseDescription
       draft = $false
       prerelease = $false
-    } | ConvertTo-Json -Compress
+    } | ConvertTo-Json -Compress -Depth 10
     
     try {
       $releaseResponse = Invoke-RestMethod -Uri $releaseUrl -Method Post -Headers $headers -Body $releaseBody -ErrorAction Stop
@@ -954,7 +954,7 @@ function Upload-ToGitHubRelease([string]$version, [array]$artifacts) {
       # Use HttpClient for reliable file uploads
       Add-Type -AssemblyName System.Net.Http
       
-      $httpClient = New-Object System.Net.Http.HttpClient
+      $httpClient = New-Object System.Net.Http.HttpClient`n      $httpClient.Timeout = [System.TimeSpan]::FromSeconds(120)
       $httpClient.DefaultRequestHeaders.Add("Authorization", "token $script:GitHubToken")
       $httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json")
       
