@@ -4,6 +4,7 @@
   "package": "za.co.infernos.noisiumed.mixin",
   "compatibilityLevel": "JAVA_21",
   "plugin": "za.co.infernos.noisiumed.mixin.NoisiumMixinPlugin",
+  "refmap": "noisiumed-common.refmap.json",
   "mixins": [
     "ChainedBlockSourceMixin",
     "ChunkSectionMixin",

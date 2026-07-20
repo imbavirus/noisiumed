@@ -46,6 +46,7 @@
     "c2me": "*"
   },
   "breaks": {
-    "biox": "*"
+    "biox": "*",
+    "connector": "*"
   }
 }
