@@ -309,10 +309,17 @@ function Build-Mod() {
   
   # Use gradlew if available, otherwise try gradle
   $gradleCmd = if (Test-Path "gradlew.bat") { ".\gradlew.bat" } elseif (Test-Path "gradlew") { ".\gradlew" } else { "gradle" }
-  
+
+  # Prefer clean build, but on Windows file locks in common/build/devlibs can make :clean fail.
+  # Artifact discovery already filters by this branch's +mc suffix, so a plain build is safe.
   & $gradleCmd clean build
   if ($LASTEXITCODE -ne 0) {
-    throw "Gradle build failed"
+    Write-Warning "Gradle clean build failed; retrying without clean..."
+    & $gradleCmd --stop 2>$null | Out-Null
+    & $gradleCmd build
+    if ($LASTEXITCODE -ne 0) {
+      throw "Gradle build failed"
+    }
   }
   
   Write-Host "Build completed successfully"
