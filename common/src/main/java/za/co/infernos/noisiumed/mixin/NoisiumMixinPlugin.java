@@ -29,7 +29,7 @@ public class NoisiumMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public String getRefMapperConfig() {
-		return null;
+		return "noisiumed-common.refmap.json";
 	}
 
 	@Override
