@@ -75,7 +75,8 @@ jobs:
           # Modrinth
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
 
-          name: ${{ steps.mod_version.outputs.value }} (${{ steps.supported_minecraft_version_name.outputs.value }})
+          name: v${{ steps.mod_version.outputs.value }}
+          version: ${{ steps.mod_version.outputs.value }}
           github-tag: ${{ env.release_tag_name }}
           files: |
             fabric/build/libs/!(*-@(sources|dev-shadow|javadoc|transformProduction*).jar)
@@ -91,7 +92,8 @@ jobs:
           # Modrinth
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
 
-          name: ${{ steps.mod_version.outputs.value }} (${{ steps.supported_minecraft_version_name.outputs.value }})
+          name: v${{ steps.mod_version.outputs.value }}
+          version: ${{ steps.mod_version.outputs.value }}
           github-tag: ${{ env.release_tag_name }}
           files: |
             neoforge/build/libs/!(*-@(sources|dev-shadow|javadoc|transformProduction*).jar)
