@@ -11,6 +11,9 @@ base {
 
 loom {
     accessWidenerPath = file("src/main/resources/${mod_namespace}.accesswidener")
+    mixin {
+        defaultRefmapName.set("noisiumed-common.refmap.json")
+    }
 }
 
 dependencies {

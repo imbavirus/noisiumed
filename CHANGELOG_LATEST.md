@@ -1,3 +1,4 @@
 ### Fixed
 
-- Deployment fix for the new version
+- NeoForge chunk load failures from a broken `ChainedBlockSource` constructor mixin inject
+- Mixin refmap wiring so NeoForge/Fabric remapping can resolve Yarn descriptors
