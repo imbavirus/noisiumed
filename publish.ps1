@@ -40,12 +40,14 @@
     - MODRINTH_TOKEN (or MR_TOKEN / MODRINTH_API_TOKEN)
     - MODRINTH_GAME_VERSIONS: comma-separated Minecraft versions (e.g., "1.20.2,1.20.3,1.20.4")
         - If omitted, expands supported_minecraft_version_name from gradle.properties
-          (e.g. 1.20.2-1.20.4 -> 1.20.2,1.20.3,1.20.4). Matches GitHub mc-publish standard.
+          (e.g. 1.20.2-1.20.4 -> 1.20.2,1.20.3,1.20.4). Each MC version is uploaded separately.
     - MODRINTH_LOADERS: comma-separated mod loaders (e.g., "neoforge", "forge", "fabric")
-        - If omitted, uses enabled_platforms from gradle.properties (excluding common).
+        - If omitted, uses loaders present in build artifacts / enabled_platforms.
+        - Each loader is uploaded as its own Modrinth version (Goety-style: one file per MC x loader).
     - MODRINTH_RELEASE_TYPE: release | beta | alpha (default: release)
     - MODRINTH_CHANGELOG_FILE: optional path to a changelog file (markdown/text)
         - If not set, automatically looks for changelogs/{version}.md (e.g., changelogs/3.0.1.md)
+    - Modrinth version_number / name use plain semver (e.g. 3.0.6 / v3.0.6), not +mc… suffixes.
 
 .PARAMETER Bump
   patch | minor | major
@@ -874,25 +876,19 @@ function Upload-ToModrinth([string]$version, [array]$artifacts) {
     throw "MODRINTH_TOKEN appears too short (length: $($mr.Token.Length)). Please verify your token is correct."
   }
 
-  $supportedName = Get-SupportedMinecraftVersionName
-  # Standard version identity (matches .github/workflows/publish-modrinth.yml):
-  #   version_number = 3.0.6+mc1.20.2-1.20.4
-  #   name           = 3.0.6 (1.20.2-1.20.4)
-  $versionNumber = "{0}+mc{1}" -f $version, $supportedName
-  $versionName = "{0} ({1})" -f $version, $supportedName
-
-  $gameVersions = Resolve-ModrinthGameVersions $mr
-  $modArtifacts = @($artifacts | Where-Object { $_.Loader -ne "common" })
+  # Goety-style Modrinth identity:
+  #   one request = one JAR = one loader = one Minecraft version
+  #   version_number / name = plain semver (no +mc… jargon)
+  $gameVersions = @(Resolve-ModrinthGameVersions $mr)
+  $modArtifacts = @($artifacts | Where-Object { $_.Loader -ne "common" -and $_.Loader -ne "unknown" })
   if ($modArtifacts.Count -eq 0) {
-    # Artifacts without Loader property (root build/libs fallback)
-    $modArtifacts = @($artifacts)
+    $modArtifacts = @($artifacts | Where-Object { $_.Loader -ne "common" })
   }
   if ($modArtifacts.Count -eq 0) {
     Write-Warning "No mod artifacts found for Modrinth upload."
     return
   }
 
-  $loaders = Resolve-ModrinthLoaders $mr @($modArtifacts | ForEach-Object { $_.Loader })
   $releaseType = if ($mr.ReleaseType) { $mr.ReleaseType.Trim().ToLowerInvariant() } else { "release" }
   if ($releaseType -notin @("release", "beta", "alpha")) {
     throw "Invalid MODRINTH_RELEASE_TYPE '$releaseType'. Expected: release | beta | alpha"
@@ -914,79 +910,86 @@ function Upload-ToModrinth([string]$version, [array]$artifacts) {
     }
   }
 
-  $gameVersionsArray = [string[]]@($gameVersions)
-  $loadersArray = [string[]]@($loaders)
-  $filePartsArray = [string[]]@($modArtifacts | ForEach-Object { $_.Name })
-
-  $metadata = @{
-    name = $versionName
-    version_number = $versionNumber
-    changelog = [string]$changelog
-    dependencies = @()
-    game_versions = $gameVersionsArray
-    loaders = $loadersArray
-    release_channel = $releaseType
-    featured = $false
-    project_id = $mr.ProjectId
-    file_parts = $filePartsArray
-  }
-
-  $metadataJson = $metadata | ConvertTo-Json -Compress -Depth 10
-  $metadataJson = $metadataJson -replace '("game_versions"\s*:\s*)"([^"]+)"', '$1["$2"]'
-  $metadataJson = $metadataJson -replace '("loaders"\s*:\s*)"([^"]+)"', '$1["$2"]'
-  $metadataJson = $metadataJson -replace '("file_parts"\s*:\s*)"([^"]+)"', '$1["$2"]'
-
+  # Match Goety: display name "vX.Y.Z", version_number "X.Y.Z"
+  $versionName = "v$version"
+  $versionNumber = $version
   $uploadUri = "$($mr.BaseUrl)/v2/version"
-  Write-Host "Uploading unified Modrinth version..."
-  Write-Host "  Name: $versionName"
-  Write-Host "  Version number: $versionNumber"
-  Write-Host "  Game versions: $($gameVersionsArray -join ', ')"
-  Write-Host "  Loaders: $($loadersArray -join ', ')"
-  Write-Host "  Files: $($filePartsArray -join ', ')"
-  Write-Host "  Release type: $releaseType"
 
   Add-Type -AssemblyName System.Net.Http
-  $client = New-Object System.Net.Http.HttpClient
-  $client.Timeout = [System.TimeSpan]::FromSeconds(120)
-  $client.DefaultRequestHeaders.Add("Authorization", $mr.Token)
 
-  $multipart = New-Object System.Net.Http.MultipartFormDataContent
-  $metaContent = New-Object System.Net.Http.StringContent($metadataJson, [System.Text.Encoding]::UTF8, "application/json")
-  $multipart.Add($metaContent, "data")
+  foreach ($artifact in $modArtifacts) {
+    $loader = ([string]$artifact.Loader).Trim().ToLowerInvariant()
+    if (-not $loader -or $loader -eq "common") { continue }
 
-  $streams = @()
-  try {
-    foreach ($artifact in $modArtifacts) {
-      $fileStream = [System.IO.File]::OpenRead($artifact.FullName)
-      $streams += $fileStream
-      $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
-      $fileContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("application/java-archive")
-      # Field name must match file_parts entry
-      $multipart.Add($fileContent, $artifact.Name, $artifact.Name)
-    }
+    foreach ($gameVersion in $gameVersions) {
+      $gameVersionsArray = [string[]]@($gameVersion)
+      $loadersArray = [string[]]@($loader)
+      $filePartsArray = [string[]]@($artifact.Name)
 
-    $resp = $client.PostAsync($uploadUri, $multipart).Result
-    $respBody = $resp.Content.ReadAsStringAsync().Result
-    if (-not $resp.IsSuccessStatusCode) {
-      throw "Modrinth upload failed: $([int]$resp.StatusCode) $($resp.ReasonPhrase)`n$respBody"
-    }
+      $metadata = @{
+        name = $versionName
+        version_number = $versionNumber
+        changelog = [string]$changelog
+        dependencies = @()
+        game_versions = $gameVersionsArray
+        loaders = $loadersArray
+        release_channel = $releaseType
+        featured = $false
+        project_id = $mr.ProjectId
+        file_parts = $filePartsArray
+      }
 
-    Write-Host "  [OK] Uploaded unified version to Modrinth."
-    if ($respBody) {
+      $metadataJson = $metadata | ConvertTo-Json -Compress -Depth 10
+      $metadataJson = $metadataJson -replace '("game_versions"\s*:\s*)"([^"]+)"', '$1["$2"]'
+      $metadataJson = $metadataJson -replace '("loaders"\s*:\s*)"([^"]+)"', '$1["$2"]'
+      $metadataJson = $metadataJson -replace '("file_parts"\s*:\s*)"([^"]+)"', '$1["$2"]'
+
+      Write-Host "Uploading Modrinth version..."
+      Write-Host "  Name: $versionName"
+      Write-Host "  Version number: $versionNumber"
+      Write-Host "  Game version: $gameVersion"
+      Write-Host "  Loader: $loader"
+      Write-Host "  File: $($artifact.Name)"
+      Write-Host "  Release type: $releaseType"
+
+      $client = New-Object System.Net.Http.HttpClient
+      $client.Timeout = [System.TimeSpan]::FromSeconds(120)
+      $client.DefaultRequestHeaders.Add("Authorization", $mr.Token)
+
+      $multipart = New-Object System.Net.Http.MultipartFormDataContent
+      $metaContent = New-Object System.Net.Http.StringContent($metadataJson, [System.Text.Encoding]::UTF8, "application/json")
+      $multipart.Add($metaContent, "data")
+
+      $fileStream = $null
       try {
-        $responseObj = $respBody | ConvertFrom-Json
-        if ($responseObj.id) {
-          Write-Host "  Version ID: $($responseObj.id)"
-          Write-Host "  Version URL: https://modrinth.com/mod/$($mr.ProjectId)/version/$($responseObj.version_number)"
+        $fileStream = [System.IO.File]::OpenRead($artifact.FullName)
+        $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
+        $fileContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("application/java-archive")
+        $multipart.Add($fileContent, $artifact.Name, $artifact.Name)
+
+        $resp = $client.PostAsync($uploadUri, $multipart).Result
+        $respBody = $resp.Content.ReadAsStringAsync().Result
+        if (-not $resp.IsSuccessStatusCode) {
+          throw "Modrinth upload failed for $($artifact.Name) [$loader / $gameVersion]: $([int]$resp.StatusCode) $($resp.ReasonPhrase)`n$respBody"
         }
-      } catch {
-        Write-Host "  Response: $respBody"
+
+        Write-Host "  [OK] Uploaded $($artifact.Name) ($loader / $gameVersion)."
+        if ($respBody) {
+          try {
+            $responseObj = $respBody | ConvertFrom-Json
+            if ($responseObj.id) {
+              Write-Host "  Version ID: $($responseObj.id)"
+            }
+          } catch {
+            Write-Host "  Response: $respBody"
+          }
+        }
+      } finally {
+        if ($fileStream) { $fileStream.Close() }
+        $multipart.Dispose()
+        $client.Dispose()
       }
     }
-  } finally {
-    foreach ($s in $streams) { $s.Close() }
-    $multipart.Dispose()
-    $client.Dispose()
   }
 }
 
