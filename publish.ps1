@@ -534,10 +534,20 @@ function Resolve-CurseForgeGameVersionIds([hashtable]$cf, [string[]]$minecraftVe
   $resolved = @()
 
   foreach ($minecraftVersion in $minecraftVersions) {
-    $mc = $all | Where-Object {
+    # CurseForge lists the same MC version under multiple gameVersionTypeIDs.
+    # Type 1 = environment, 615 = invalid-for-upload dependency bucket.
+    # Prefer the real Minecraft Java type (e.g. 75125 for 1.20.x, 77784 for 1.21.x).
+    $candidates = @($all | Where-Object {
       ($_.name -eq $minecraftVersion) -or ($_.versionString -eq $minecraftVersion) -or ($_.slug -eq $minecraftVersion)
-    } | Select-Object -First 1
-    if ($mc -and $mc.id) { $resolved += [int]$mc.id }
+    })
+    $mc = $candidates | Where-Object { $_.gameVersionTypeID -notin @(1, 615) } | Select-Object -First 1
+    if (-not $mc) { $mc = $candidates | Select-Object -First 1 }
+    if ($mc -and $mc.id) {
+      $resolved += [int]$mc.id
+      Write-Host "Auto-resolved CurseForge Minecraft $($minecraftVersion): $($mc.id) (type $($mc.gameVersionTypeID))"
+    } else {
+      Write-Warning "Could not resolve CurseForge Minecraft version ID for '$minecraftVersion'."
+    }
   }
 
   # If this is a loader-specific build, also try to include the loader ID.
@@ -1121,6 +1131,14 @@ function Upload-ToGitHubRelease([string]$version, [array]$artifacts) {
   
   Write-Host "Uploading $($artifacts.Count) artifact(s) to GitHub release..."
   Write-Host "Upload base URL: $uploadUrlBase"
+
+  # Refresh asset list so retries can replace same-named files.
+  $existingAssets = @()
+  try {
+    $existingAssets = @(Invoke-RestMethod -Uri "$releaseUrl/$releaseId/assets?per_page=100" -Headers $headers -ErrorAction Stop)
+  } catch {
+    Write-Warning "Could not list existing release assets: $_"
+  }
   
   foreach ($artifact in $artifacts) {
     $fileName = $artifact.Name
@@ -1128,19 +1146,20 @@ function Upload-ToGitHubRelease([string]$version, [array]$artifacts) {
     $fileSize = (Get-Item $filePath).Length
     
     Write-Host "Uploading $fileName ($([math]::Round($fileSize / 1MB, 2)) MB)..."
+
+    $prior = $existingAssets | Where-Object { $_.name -eq $fileName } | Select-Object -First 1
+    if ($prior) {
+      Write-Host "  Replacing existing asset id $($prior.id)..."
+      try {
+        Invoke-RestMethod -Uri "$apiBase/repos/$repoPath/releases/assets/$($prior.id)" -Headers $headers -Method Delete -ErrorAction Stop | Out-Null
+      } catch {
+        Write-Warning "  Failed to delete existing asset '$fileName': $_"
+      }
+    }
     
-    # GitHub release asset upload API expects raw file content
-    # The upload URL should include ?name= parameter
-    # Use PowerShell's built-in URI encoding
     $encodedFileName = [Uri]::EscapeDataString($fileName)
-    # Use explicit string concatenation to avoid interpolation issues
     $uploadUrlWithName = $uploadUrlBase + "?name=" + $encodedFileName
     
-    Write-Host "Debug: uploadUrlBase in loop = '$uploadUrlBase'"
-    Write-Host "Debug: encodedFileName = '$encodedFileName'"
-    Write-Host "Full upload URL: $uploadUrlWithName"
-    
-    # Validate URL before attempting upload
     try {
       $uri = [Uri]::new($uploadUrlWithName)
       if (-not $uri.IsAbsoluteUri) {
