@@ -29,7 +29,7 @@ public class NoisiumMixinPlugin implements IMixinConfigPlugin {
 
 	@Override
 	public String getRefMapperConfig() {
-		return null;
+		return "noisiumed-common.refmap.json";
 	}
 
 	@Override
@@ -46,5 +46,3 @@ public class NoisiumMixinPlugin implements IMixinConfigPlugin {
 	@Override
 	public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
 }
-
-
