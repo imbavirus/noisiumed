@@ -581,23 +581,16 @@ function Resolve-CurseForgeGameVersionIds([hashtable]$cf, [string[]]$minecraftVe
     }
     $resolved += $envIds
   } else {
-    # Auto-resolve server and client environment IDs
-    # Server-side environment type ID is 1, Client is 2 (from CurseForge API docs)
-    # Search for environment versions with these type IDs
+    # Environment group (gameVersionTypeID 75208): Client=9638, Server=9639
     $serverEnv = $all | Where-Object {
-      $_.gameVersionTypeID -eq 1 -and ($_.name -like "*server*" -or $_.slug -like "*server*" -or $_.id -eq 1)
+      ($_.name -eq "Server" -or $_.slug -eq "server") -and ($_.gameVersionTypeID -eq 75208 -or -not $_.gameVersionTypeID)
     } | Select-Object -First 1
     $clientEnv = $all | Where-Object {
-      $_.gameVersionTypeID -eq 1 -and ($_.name -like "*client*" -or $_.slug -like "*client*" -or $_.id -eq 2)
+      ($_.name -eq "Client" -or $_.slug -eq "client") -and ($_.gameVersionTypeID -eq 75208 -or -not $_.gameVersionTypeID)
     } | Select-Object -First 1
-    
-    # If not found by name, try by ID (common: Server = 1, Client = 2)
-    if (-not $serverEnv) {
-      $serverEnv = $all | Where-Object { $_.id -eq 1 -and $_.gameVersionTypeID -eq 1 } | Select-Object -First 1
-    }
-    if (-not $clientEnv) {
-      $clientEnv = $all | Where-Object { $_.id -eq 2 -and $_.gameVersionTypeID -eq 1 } | Select-Object -First 1
-    }
+
+    if (-not $serverEnv) { $serverEnv = $all | Where-Object { $_.id -eq 9639 } | Select-Object -First 1 }
+    if (-not $clientEnv) { $clientEnv = $all | Where-Object { $_.id -eq 9638 } | Select-Object -First 1 }
     
     if ($serverEnv -and $serverEnv.id) { 
       $resolved += [int]$serverEnv.id
