@@ -38,10 +38,11 @@
   Modrinth env vars (optional):
     - MODRINTH_PROJECT_ID (or MR_PROJECT_ID / MODRINTH_PROJECT)
     - MODRINTH_TOKEN (or MR_TOKEN / MODRINTH_API_TOKEN)
-    - MODRINTH_GAME_VERSIONS: comma-separated Minecraft versions (e.g., "1.21.1")
-        - If omitted, the script attempts to auto-detect from minecraft_version in gradle.properties.
+    - MODRINTH_GAME_VERSIONS: comma-separated Minecraft versions (e.g., "1.20.2,1.20.3,1.20.4")
+        - If omitted, expands supported_minecraft_version_name from gradle.properties
+          (e.g. 1.20.2-1.20.4 -> 1.20.2,1.20.3,1.20.4). Matches GitHub mc-publish standard.
     - MODRINTH_LOADERS: comma-separated mod loaders (e.g., "neoforge", "forge", "fabric")
-        - If omitted, the script attempts to auto-detect "neoforge" based on the project.
+        - If omitted, uses enabled_platforms from gradle.properties (excluding common).
     - MODRINTH_RELEASE_TYPE: release | beta | alpha (default: release)
     - MODRINTH_CHANGELOG_FILE: optional path to a changelog file (markdown/text)
         - If not set, automatically looks for changelogs/{version}.md (e.g., changelogs/3.0.1.md)
@@ -317,24 +318,147 @@ function Build-Mod() {
   Write-Host "Build completed successfully"
 }
 
+function Get-GradleProperty([string]$name) {
+  $line = Get-Content -Path "gradle.properties" | Where-Object { $_ -match ("^{0}=(.+)$" -f [regex]::Escape($name)) } | Select-Object -First 1
+  if ($line -and ($line -match ("^{0}=(.+)$" -f [regex]::Escape($name)))) {
+    return $Matches[1].Trim()
+  }
+  return $null
+}
+
+function Get-EnabledPlatforms() {
+  $raw = Get-GradleProperty "enabled_platforms"
+  if (-not $raw) { return @("fabric", "neoforge") }
+  return @($raw -split "[,;\s]+" | Where-Object { $_ } | ForEach-Object { $_.Trim().ToLowerInvariant() })
+}
+
+function Get-SupportedMinecraftVersionName() {
+  $name = Get-GradleProperty "supported_minecraft_version_name"
+  if (-not $name) { $name = Get-GradleProperty "minecraft_version" }
+  if (-not $name) { throw "Could not read supported_minecraft_version_name or minecraft_version from gradle.properties." }
+  return $name
+}
+
+function Expand-MinecraftVersionRange([string]$rangeName) {
+  # Expand supported_minecraft_version_name into concrete Modrinth game_versions.
+  # Examples:
+  #   1.21.6          -> 1.21.6
+  #   1.20.5-1.20.6   -> 1.20.5, 1.20.6
+  #   1.20.2-1.20.4   -> 1.20.2, 1.20.3, 1.20.4
+  #   1.20-1.20.1     -> 1.20, 1.20.1
+  #   1.21-1.21.1     -> 1.21, 1.21.1
+  #   1.21.2-1.21.3   -> 1.21.2, 1.21.3
+  if ([string]::IsNullOrWhiteSpace($rangeName)) { return @() }
+  if ($rangeName -notmatch '-') { return @($rangeName) }
+
+  $parts = $rangeName -split '-', 2
+  if ($parts.Count -ne 2) { return @($rangeName) }
+  $start = $parts[0].Trim()
+  $end = $parts[1].Trim()
+
+  function Parse-Mc([string]$v) {
+    if ($v -match '^(\d+)\.(\d+)(?:\.(\d+))?$') {
+      return @{
+        Major = [int]$Matches[1]
+        Minor = [int]$Matches[2]
+        Patch = if ($Matches[3]) { [int]$Matches[3] } else { -1 } # -1 means "major.minor" form (e.g. 1.20)
+        Raw = $v
+      }
+    }
+    return $null
+  }
+
+  $a = Parse-Mc $start
+  $b = Parse-Mc $end
+  if (-not $a -or -not $b) { return @($start, $end) | Select-Object -Unique }
+
+  # Same major.minor, expand patch numbers (treat missing patch as 0 for ordering, but keep display form)
+  if ($a.Major -eq $b.Major -and $a.Minor -eq $b.Minor) {
+    $startPatch = if ($a.Patch -lt 0) { 0 } else { $a.Patch }
+    $endPatch = if ($b.Patch -lt 0) { 0 } else { $b.Patch }
+    if ($startPatch -gt $endPatch) { $tmp = $startPatch; $startPatch = $endPatch; $endPatch = $tmp }
+
+    $versions = @()
+    for ($p = $startPatch; $p -le $endPatch; $p++) {
+      if ($p -eq 0 -and $a.Patch -lt 0) {
+        $versions += "{0}.{1}" -f $a.Major, $a.Minor
+      } else {
+        $versions += "{0}.{1}.{2}" -f $a.Major, $a.Minor, $p
+      }
+    }
+    # Ensure endpoint raw forms are present (e.g. include both 1.20 and 1.20.1)
+    if ($versions -notcontains $start) { $versions = @($start) + $versions }
+    if ($versions -notcontains $end) { $versions += $end }
+    return @($versions | Select-Object -Unique)
+  }
+
+  # Adjacent minors with explicit patches (e.g. 1.21.2-1.21.3)
+  if ($a.Major -eq $b.Major -and $b.Minor -eq ($a.Minor + 1) -and $a.Patch -ge 0 -and $b.Patch -ge 0) {
+    $versions = @()
+    for ($p = $a.Patch; $p -le 20; $p++) { # safety cap; MC patches rarely exceed this per minor
+      $versions += "{0}.{1}.{2}" -f $a.Major, $a.Minor, $p
+      if ($a.Minor -eq $b.Minor -and $p -ge $b.Patch) { break }
+    }
+    # Simpler: just list start..end minors' known endpoints when only one patch each
+    return @($start, $end) | Select-Object -Unique
+  }
+
+  # Fallback: include both endpoints
+  return @($start, $end) | Select-Object -Unique
+}
+
 function Find-BuildArtifacts() {
-  # Find JAR files in build/libs directory
-  $libsDir = "build/libs"
-  if (-not (Test-Path $libsDir)) {
-    throw "Build directory not found: $libsDir (build may have failed)"
+  # Discover loader JARs from subprojects (fabric/forge/neoforge), scoped to this branch's MC range.
+  # Avoids picking up stale jars left from publishing other version branches.
+  $supportedName = Get-SupportedMinecraftVersionName
+  $mcSuffix = "+mc$supportedName"
+  $platforms = Get-EnabledPlatforms
+  $scanLoaders = @($platforms + @("common") | Select-Object -Unique)
+  $foundArtifacts = @()
+
+  foreach ($loader in $scanLoaders) {
+    $libsDir = "$loader/build/libs"
+    if (-not (Test-Path $libsDir)) { continue }
+
+    $loaderArtifacts = Get-ChildItem -Path $libsDir -Filter "*.jar" | Where-Object {
+      $name = $_.Name
+      -not $name.Contains("-sources") -and
+      -not $name.Contains("-javadoc") -and
+      -not $name.Contains("-dev-shadow") -and
+      -not $name.Contains("-dev") -and
+      -not $name.Contains("transformProduction") -and
+      (
+        $name.Contains($mcSuffix) -or
+        # Older naming: noisiumed-3.0.6-neoforge-1.21.1.jar
+        ($name -match ("-{0}\.jar$" -f [regex]::Escape((Get-GradleProperty "minecraft_version"))))
+      )
+    }
+
+    foreach ($art in $loaderArtifacts) {
+      $art | Add-Member -MemberType NoteProperty -Name "Loader" -Value $loader -Force
+      $foundArtifacts += $art
+    }
   }
-  
-  # Find all JAR files, but exclude sources and javadoc JARs
-  $artifacts = Get-ChildItem -Path $libsDir -Filter "*.jar" | Where-Object {
-    $name = $_.Name
-    -not $name.Contains("-sources") -and -not $name.Contains("-javadoc")
+
+  # Fallback: root build/libs (single-jar projects)
+  if ($foundArtifacts.Count -eq 0 -and (Test-Path "build/libs")) {
+    $rootArts = Get-ChildItem -Path "build/libs" -Filter "*.jar" | Where-Object {
+      $name = $_.Name
+      -not $name.Contains("-sources") -and -not $name.Contains("-javadoc") -and -not $name.Contains("-dev")
+    }
+    foreach ($art in $rootArts) {
+      $art | Add-Member -MemberType NoteProperty -Name "Loader" -Value "unknown" -Force
+      $foundArtifacts += $art
+    }
   }
-  
-  if ($artifacts.Count -eq 0) {
-    throw "No JAR artifacts found in $libsDir"
+
+  if ($foundArtifacts.Count -eq 0) {
+    throw "No JAR artifacts found for MC range '$supportedName' in loader subprojects: $($platforms -join ', ')"
   }
-  
-  return $artifacts
+
+  Write-Host "Discovered artifacts for MC $supportedName (loaders: $(($foundArtifacts.Loader | Select-Object -Unique) -join ', ')):"
+  foreach ($a in $foundArtifacts) { Write-Host "  - $($a.Name) [$($a.Loader)]" }
+  return $foundArtifacts
 }
 
 function Get-EnvAny([string[]]$Names) {
@@ -387,7 +511,7 @@ function Get-CurseForgeGameVersions([hashtable]$cf) {
   return Invoke-RestMethod -Uri $uri -Headers $headers -Method Get -ErrorAction Stop
 }
 
-function Resolve-CurseForgeGameVersionIds([hashtable]$cf, [string]$minecraftVersion) {
+function Resolve-CurseForgeGameVersionIds([hashtable]$cf, [string[]]$minecraftVersions, [string]$loaderName = $null) {
   # Prefer explicit IDs if user supplied them.
   if (-not [string]::IsNullOrWhiteSpace($cf.GameVersionIdsRaw)) {
     $ids = @()
@@ -409,24 +533,25 @@ function Resolve-CurseForgeGameVersionIds([hashtable]$cf, [string]$minecraftVers
 
   $resolved = @()
 
-  $mc = $all | Where-Object {
-    ($_.name -eq $minecraftVersion) -or ($_.versionString -eq $minecraftVersion) -or ($_.slug -eq $minecraftVersion)
-  } | Select-Object -First 1
-
-  if ($mc -and $mc.id) { $resolved += [int]$mc.id }
+  foreach ($minecraftVersion in $minecraftVersions) {
+    $mc = $all | Where-Object {
+      ($_.name -eq $minecraftVersion) -or ($_.versionString -eq $minecraftVersion) -or ($_.slug -eq $minecraftVersion)
+    } | Select-Object -First 1
+    if ($mc -and $mc.id) { $resolved += [int]$mc.id }
+  }
 
   # If this is a loader-specific build, also try to include the loader ID.
-  $loaderName = $cf.ModLoaderName
-  if (-not $loaderName) {
-    # Heuristic: this repo is NeoForge-based.
-    $loaderName = "NeoForge"
-  }
+  if (-not $loaderName) { $loaderName = $cf.ModLoaderName }
+  if (-not $loaderName) { $loaderName = "NeoForge" }
 
   $loader = $all | Where-Object {
     ($_.name -eq $loaderName) -or ($_.slug -eq $loaderName) -or ($_.name -like "*$loaderName*")
   } | Select-Object -First 1
 
-  if ($loader -and $loader.id) { $resolved += [int]$loader.id }
+  if ($loader -and $loader.id) {
+    $resolved += [int]$loader.id
+    Write-Host "Auto-resolved CurseForge loader ID for ${loaderName}: $($loader.id)"
+  }
 
   # Add server/client environment IDs if not explicitly provided
   if (-not [string]::IsNullOrWhiteSpace($cf.EnvironmentIdsRaw)) {
@@ -562,94 +687,86 @@ function Upload-ToCurseForge([string]$version, [array]$artifacts) {
     throw "CurseForge project ID must be numeric. Got: '$projectId'"
   }
 
-  # We want minecraft_version from gradle.properties (not mod_version).
-  $gp = Get-Content -Path "gradle.properties"
-  $mcLine = $gp | Where-Object { $_ -match '^minecraft_version=(.+)$' } | Select-Object -First 1
-  $mcVersion = if ($mcLine -and ($mcLine -match '^minecraft_version=(.+)$')) { $Matches[1].Trim() } else { $null }
-
-  if (-not $mcVersion) {
-    throw "Could not read minecraft_version from gradle.properties (required for CurseForge auto-resolution)."
+  $supportedName = Get-SupportedMinecraftVersionName
+  $mcVersions = @(Expand-MinecraftVersionRange $supportedName)
+  if ($mcVersions.Count -eq 0) {
+    throw "Could not expand supported_minecraft_version_name for CurseForge game versions."
   }
-
-  $gameVersionIds = Resolve-CurseForgeGameVersionIds $cf $mcVersion
 
   $releaseType = if ($cf.ReleaseType) { $cf.ReleaseType.Trim().ToLowerInvariant() } else { "release" }
   if ($releaseType -notin @("release", "beta", "alpha")) {
     throw "Invalid CF_RELEASE_TYPE '$releaseType'. Expected: release | beta | alpha"
   }
 
-  $artifact = Pick-MainArtifact $artifacts
-  $filePath = $artifact.FullName
-  $fileName = $artifact.Name
-
   $changelog = $null
-  # Priority: 1) Explicit CF_CHANGELOG_FILE, 2) Auto-detect changelogs/{version}.md, 3) Note parameter, 4) Default
   if ($cf.ChangelogFile -and (Test-Path $cf.ChangelogFile)) {
     $changelog = Get-Content -Path $cf.ChangelogFile -Raw
     Write-Host "Using changelog from CF_CHANGELOG_FILE: $($cf.ChangelogFile)"
   } else {
-    # Auto-detect changelog from changelogs/{version}.md
     $autoChangelogPath = "changelogs/$version.md"
     if (Test-Path $autoChangelogPath) {
       $changelog = Get-Content -Path $autoChangelogPath -Raw
       Write-Host "Using auto-detected changelog: $autoChangelogPath"
     } elseif ($script:Note) {
       $changelog = $script:Note
-      Write-Host "Using changelog from -Note parameter"
     } else {
       $changelog = "Release v$version"
-      Write-Host "Using default changelog message"
     }
   }
 
-  # Build metadata per CurseForge Upload API.
-  $metadata = @{
-    changelog = [string]$changelog
-    changelogType = "markdown"
-    displayName = $fileName
-    gameVersions = $gameVersionIds
-    releaseType = $releaseType
-  }
-
-  $metadataJson = $metadata | ConvertTo-Json -Compress -Depth 10
-
-  $uploadUri = "$($cf.BaseUrl)/api/projects/$projectId/upload-file"
-  Write-Host "Uploading to CurseForge project $projectId..."
-  Write-Host "  URL: $uploadUri"
-  Write-Host "  File: $fileName"
-  Write-Host "  GameVersion IDs: $($gameVersionIds -join ',')"
-  Write-Host "  ReleaseType: $releaseType"
+  $modArtifacts = @($artifacts | Where-Object { $_.Loader -ne "common" })
+  if ($modArtifacts.Count -eq 0) { $modArtifacts = @(Pick-MainArtifact $artifacts) }
 
   Add-Type -AssemblyName System.Net.Http
-  $client = New-Object System.Net.Http.HttpClient
-  $client.Timeout = [System.TimeSpan]::FromSeconds(120)
-  $client.DefaultRequestHeaders.Add("X-Api-Token", $cf.Token)
+  $uploadUri = "$($cf.BaseUrl)/api/projects/$projectId/upload-file"
 
-  $multipart = New-Object System.Net.Http.MultipartFormDataContent
-  $metaContent = New-Object System.Net.Http.StringContent($metadataJson, [System.Text.Encoding]::UTF8, "application/json")
-  $multipart.Add($metaContent, "metadata")
-
-  $fileStream = [System.IO.File]::OpenRead($filePath)
-  try {
-    $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
-    $fileContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("application/java-archive")
-    $multipart.Add($fileContent, "file", $fileName)
-
-    $resp = $client.PostAsync($uploadUri, $multipart).Result
-    $respBody = $resp.Content.ReadAsStringAsync().Result
-    if (-not $resp.IsSuccessStatusCode) {
-      throw "CurseForge upload failed: $([int]$resp.StatusCode) $($resp.ReasonPhrase)
-$respBody"
+  foreach ($artifact in $modArtifacts) {
+    $loaderKey = if ($artifact.Loader) { $artifact.Loader } else { "neoforge" }
+    $loaderDisplay = switch ($loaderKey.ToLowerInvariant()) {
+      "neoforge" { "NeoForge" }
+      "fabric" { "Fabric" }
+      "forge" { "Forge" }
+      default { $loaderKey }
     }
 
-    Write-Host "  [OK] Uploaded to CurseForge."
-    if ($respBody) {
-      Write-Host "  Response: $respBody"
+    $gameVersionIds = Resolve-CurseForgeGameVersionIds $cf $mcVersions $loaderDisplay
+    $filePath = $artifact.FullName
+    $fileName = $artifact.Name
+
+    $metadata = @{
+      changelog = [string]$changelog
+      changelogType = "markdown"
+      displayName = $fileName
+      gameVersions = @($gameVersionIds | Select-Object -Unique)
+      releaseType = $releaseType
     }
-  }   finally {
-    $fileStream.Close()
-    $multipart.Dispose()
-    $client.Dispose()
+    $metadataJson = $metadata | ConvertTo-Json -Compress -Depth 10
+
+    Write-Host "Uploading $fileName to CurseForge (Loader: $loaderKey)..."
+    Write-Host "  Game versions: $($mcVersions -join ', ') | IDs: $((@($gameVersionIds | Select-Object -Unique)) -join ',')"
+
+    $client = New-Object System.Net.Http.HttpClient
+    $client.Timeout = [System.TimeSpan]::FromSeconds(120)
+    $client.DefaultRequestHeaders.Add("X-Api-Token", $cf.Token)
+    $multipart = New-Object System.Net.Http.MultipartFormDataContent
+    $metaContent = New-Object System.Net.Http.StringContent($metadataJson, [System.Text.Encoding]::UTF8, "application/json")
+    $multipart.Add($metaContent, "metadata")
+    $fileStream = [System.IO.File]::OpenRead($filePath)
+    try {
+      $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
+      $fileContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("application/java-archive")
+      $multipart.Add($fileContent, "file", $fileName)
+      $resp = $client.PostAsync($uploadUri, $multipart).Result
+      $respBody = $resp.Content.ReadAsStringAsync().Result
+      if (-not $resp.IsSuccessStatusCode) {
+        throw "CurseForge upload failed for ${fileName}: $([int]$resp.StatusCode) $($resp.ReasonPhrase)`n$respBody"
+      }
+      Write-Host "  [OK] Uploaded $fileName to CurseForge."
+    } finally {
+      $fileStream.Close()
+      $multipart.Dispose()
+      $client.Dispose()
+    }
   }
 }
 
@@ -678,39 +795,47 @@ function Get-ModrinthConfig() {
   }
 }
 
-function Resolve-ModrinthGameVersions([hashtable]$mr, [string]$minecraftVersion) {
+function Resolve-ModrinthGameVersions([hashtable]$mr) {
   # Prefer explicit versions if user supplied them.
   if (-not [string]::IsNullOrWhiteSpace($mr.GameVersionsRaw)) {
     $versions = @()
     foreach ($part in ($mr.GameVersionsRaw -split "[,;\s]+" | Where-Object { $_ })) {
       $t = $part.Trim()
-      if ($t) {
-        $versions += $t
-      }
+      if ($t) { $versions += $t }
     }
     if ($versions.Count -eq 0) { throw "MODRINTH_GAME_VERSIONS was provided but no versions could be parsed." }
     return $versions
   }
 
-  # Auto-detect from gradle.properties - ensure it's always an array
-  return @($minecraftVersion)
+  # Standard: expand supported_minecraft_version_name (matches GitHub mc-publish / jar +mc suffix)
+  $supportedName = Get-SupportedMinecraftVersionName
+  $expanded = Expand-MinecraftVersionRange $supportedName
+  if ($expanded.Count -eq 0) {
+    throw "Could not expand supported_minecraft_version_name '$supportedName' into Modrinth game_versions."
+  }
+  return @($expanded)
 }
 
-function Resolve-ModrinthLoaders([hashtable]$mr) {
+function Resolve-ModrinthLoaders([hashtable]$mr, [array]$foundLoaders) {
   # Prefer explicit loaders if user supplied them.
   if (-not [string]::IsNullOrWhiteSpace($mr.LoadersRaw)) {
     $loaders = @()
     foreach ($part in ($mr.LoadersRaw -split "[,;\s]+" | Where-Object { $_ })) {
       $t = $part.Trim().ToLowerInvariant()
-      if ($t) {
-        $loaders += $t
-      }
+      if ($t) { $loaders += $t }
     }
     if ($loaders.Count -eq 0) { throw "MODRINTH_LOADERS was provided but no loaders could be parsed." }
     return $loaders
   }
 
-  # Auto-detect: this project uses NeoForge
+  # Prefer loaders actually present in filtered artifacts
+  $detected = @($foundLoaders | Where-Object { $_ -and $_ -ne "common" -and $_ -ne "unknown" } | Select-Object -Unique)
+  if ($detected.Count -gt 0) { return $detected }
+
+  # Fallback: enabled_platforms from gradle.properties
+  $platforms = @(Get-EnabledPlatforms | Where-Object { $_ -ne "common" })
+  if ($platforms.Count -gt 0) { return $platforms }
+
   return @("neoforge")
 }
 
@@ -727,76 +852,65 @@ function Upload-ToModrinth([string]$version, [array]$artifacts) {
     return
   }
 
-  # Validate token format
   if ([string]::IsNullOrWhiteSpace($mr.Token)) {
     throw "MODRINTH_TOKEN is empty or whitespace-only. Please check your .env file or environment variable."
   }
 
-  # Clean token
   if ($mr.Token -match '[\r\n]') {
-    $tokenPreview = if ($mr.Token.Length -gt 20) { $mr.Token.Substring(0, 20) + "..." } else { $mr.Token }
-    $tokenLength = $mr.Token.Length
-    throw "MODRINTH_TOKEN appears to contain newlines or carriage returns (length: $tokenLength, starts with: '$tokenPreview'). In your .env file, ensure the token is on a single line."
+    throw "MODRINTH_TOKEN appears to contain newlines or carriage returns. Ensure the token is on a single line in .env."
   }
 
   if ($mr.Token.Length -lt 10) {
     throw "MODRINTH_TOKEN appears too short (length: $($mr.Token.Length)). Please verify your token is correct."
   }
 
-  $tokenPreview = if ($mr.Token.Length -gt 10) { $mr.Token.Substring(0, 10) + "..." } else { "***" }
-  Write-Host "Using Modrinth API token (length: $($mr.Token.Length), starts with: $tokenPreview)"
+  $supportedName = Get-SupportedMinecraftVersionName
+  # Standard version identity (matches .github/workflows/publish-modrinth.yml):
+  #   version_number = 3.0.6+mc1.20.2-1.20.4
+  #   name           = 3.0.6 (1.20.2-1.20.4)
+  $versionNumber = "{0}+mc{1}" -f $version, $supportedName
+  $versionName = "{0} ({1})" -f $version, $supportedName
 
-  # Get Minecraft version from gradle.properties
-  $gp = Get-Content -Path "gradle.properties"
-  $mcLine = $gp | Where-Object { $_ -match '^minecraft_version=(.+)$' } | Select-Object -First 1
-  $mcVersion = if ($mcLine -and ($mcLine -match '^minecraft_version=(.+)$')) { $Matches[1].Trim() } else { $null }
-
-  if (-not $mcVersion) {
-    throw "Could not read minecraft_version from gradle.properties (required for Modrinth auto-resolution)."
+  $gameVersions = Resolve-ModrinthGameVersions $mr
+  $modArtifacts = @($artifacts | Where-Object { $_.Loader -ne "common" })
+  if ($modArtifacts.Count -eq 0) {
+    # Artifacts without Loader property (root build/libs fallback)
+    $modArtifacts = @($artifacts)
+  }
+  if ($modArtifacts.Count -eq 0) {
+    Write-Warning "No mod artifacts found for Modrinth upload."
+    return
   }
 
-  $gameVersions = Resolve-ModrinthGameVersions $mr $mcVersion
-  $loaders = Resolve-ModrinthLoaders $mr
-
+  $loaders = Resolve-ModrinthLoaders $mr @($modArtifacts | ForEach-Object { $_.Loader })
   $releaseType = if ($mr.ReleaseType) { $mr.ReleaseType.Trim().ToLowerInvariant() } else { "release" }
   if ($releaseType -notin @("release", "beta", "alpha")) {
     throw "Invalid MODRINTH_RELEASE_TYPE '$releaseType'. Expected: release | beta | alpha"
   }
 
-  $artifact = Pick-MainArtifact $artifacts
-  $filePath = $artifact.FullName
-  $fileName = $artifact.Name
-
   $changelog = $null
-  # Priority: 1) Explicit MODRINTH_CHANGELOG_FILE, 2) Auto-detect changelogs/{version}.md, 3) Note parameter, 4) Default
   if ($mr.ChangelogFile -and (Test-Path $mr.ChangelogFile)) {
     $changelog = Get-Content -Path $mr.ChangelogFile -Raw
     Write-Host "Using changelog from MODRINTH_CHANGELOG_FILE: $($mr.ChangelogFile)"
   } else {
-    # Auto-detect changelog from changelogs/{version}.md
     $autoChangelogPath = "changelogs/$version.md"
     if (Test-Path $autoChangelogPath) {
       $changelog = Get-Content -Path $autoChangelogPath -Raw
       Write-Host "Using auto-detected changelog: $autoChangelogPath"
     } elseif ($script:Note) {
       $changelog = $script:Note
-      Write-Host "Using changelog from -Note parameter"
     } else {
       $changelog = "Release v$version"
-      Write-Host "Using default changelog message"
     }
   }
 
-  # Build metadata per Modrinth API v2
-  # Note: project_id is included in the metadata, not the URL
-  # Ensure game_versions and loaders are always arrays (not single strings)
-  # PowerShell's ConvertTo-Json can serialize single-element arrays as strings, so we need to force array type
-  $gameVersionsArray = [string[]]@(if ($gameVersions -is [array]) { $gameVersions } else { $gameVersions })
-  $loadersArray = [string[]]@(if ($loaders -is [array]) { $loaders } else { $loaders })
-  
+  $gameVersionsArray = [string[]]@($gameVersions)
+  $loadersArray = [string[]]@($loaders)
+  $filePartsArray = [string[]]@($modArtifacts | ForEach-Object { $_.Name })
+
   $metadata = @{
-    name = "v$version"
-    version_number = $version
+    name = $versionName
+    version_number = $versionNumber
     changelog = [string]$changelog
     dependencies = @()
     game_versions = $gameVersionsArray
@@ -804,58 +918,50 @@ function Upload-ToModrinth([string]$version, [array]$artifacts) {
     release_channel = $releaseType
     featured = $false
     project_id = $mr.ProjectId
-    file_parts = @($fileName)
+    file_parts = $filePartsArray
   }
 
-  # Convert to JSON, ensuring arrays are always arrays
-  # PowerShell's ConvertTo-Json can serialize single-element arrays as strings
-  # Fix by replacing string values with array syntax in JSON
   $metadataJson = $metadata | ConvertTo-Json -Compress -Depth 10
-  
-  # Fix game_versions: replace "game_versions":"value" with "game_versions":["value"]
   $metadataJson = $metadataJson -replace '("game_versions"\s*:\s*)"([^"]+)"', '$1["$2"]'
-  
-  # Fix loaders: replace "loaders":"value" with "loaders":["value"]  
   $metadataJson = $metadataJson -replace '("loaders"\s*:\s*)"([^"]+)"', '$1["$2"]'
-  
-  # Fix file_parts: replace "file_parts":"value" with "file_parts":["value"]
   $metadataJson = $metadataJson -replace '("file_parts"\s*:\s*)"([^"]+)"', '$1["$2"]'
 
   $uploadUri = "$($mr.BaseUrl)/v2/version"
-  Write-Host "Uploading to Modrinth project $($mr.ProjectId)..."
-  Write-Host "  URL: $uploadUri"
-  Write-Host "  File: $fileName"
-  Write-Host "  Game Versions: $($gameVersions -join ',')"
-  Write-Host "  Loaders: $($loaders -join ',')"
-  Write-Host "  Release Type: $releaseType"
+  Write-Host "Uploading unified Modrinth version..."
+  Write-Host "  Name: $versionName"
+  Write-Host "  Version number: $versionNumber"
+  Write-Host "  Game versions: $($gameVersionsArray -join ', ')"
+  Write-Host "  Loaders: $($loadersArray -join ', ')"
+  Write-Host "  Files: $($filePartsArray -join ', ')"
+  Write-Host "  Release type: $releaseType"
 
   Add-Type -AssemblyName System.Net.Http
   $client = New-Object System.Net.Http.HttpClient
   $client.Timeout = [System.TimeSpan]::FromSeconds(120)
-  $client.Timeout = [System.TimeSpan]::FromSeconds(60)
-  # Modrinth uses "Authorization: <token>" header format
   $client.DefaultRequestHeaders.Add("Authorization", $mr.Token)
 
   $multipart = New-Object System.Net.Http.MultipartFormDataContent
-  
-  # Modrinth API v2 expects "data" field with JSON metadata
   $metaContent = New-Object System.Net.Http.StringContent($metadataJson, [System.Text.Encoding]::UTF8, "application/json")
   $multipart.Add($metaContent, "data")
 
-  $fileStream = [System.IO.File]::OpenRead($filePath)
+  $streams = @()
   try {
-    $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
-    $fileContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("application/java-archive")
-    $multipart.Add($fileContent, "file", $fileName)
+    foreach ($artifact in $modArtifacts) {
+      $fileStream = [System.IO.File]::OpenRead($artifact.FullName)
+      $streams += $fileStream
+      $fileContent = New-Object System.Net.Http.StreamContent($fileStream)
+      $fileContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue("application/java-archive")
+      # Field name must match file_parts entry
+      $multipart.Add($fileContent, $artifact.Name, $artifact.Name)
+    }
 
     $resp = $client.PostAsync($uploadUri, $multipart).Result
     $respBody = $resp.Content.ReadAsStringAsync().Result
     if (-not $resp.IsSuccessStatusCode) {
-      throw "Modrinth upload failed: $([int]$resp.StatusCode) $($resp.ReasonPhrase)
-$respBody"
+      throw "Modrinth upload failed: $([int]$resp.StatusCode) $($resp.ReasonPhrase)`n$respBody"
     }
 
-    Write-Host "  [OK] Uploaded to Modrinth."
+    Write-Host "  [OK] Uploaded unified version to Modrinth."
     if ($respBody) {
       try {
         $responseObj = $respBody | ConvertFrom-Json
@@ -864,12 +970,11 @@ $respBody"
           Write-Host "  Version URL: https://modrinth.com/mod/$($mr.ProjectId)/version/$($responseObj.version_number)"
         }
       } catch {
-        # Ignore JSON parse errors, just show raw response
         Write-Host "  Response: $respBody"
       }
     }
   } finally {
-    $fileStream.Close()
+    foreach ($s in $streams) { $s.Close() }
     $multipart.Dispose()
     $client.Dispose()
   }
