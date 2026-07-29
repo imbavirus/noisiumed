@@ -23,7 +23,9 @@
     "noisechunk.DensityInterpolatorMixin",
     "noisechunk.DensityInterpolatorAccess",
     "noisechunk.ChunkNoiseSamplerSpecializeMixin",
-    "noisechunk.ChunkNoiseSamplerNc1Mixin"
+    "noisechunk.ChunkNoiseSamplerNc1Mixin",
+    "noisechunk.ChunkNoiseSamplerNc2Mixin",
+    "noisechunk.CellCacheAccess"
   ],
   "client": [],
   "injectors": {

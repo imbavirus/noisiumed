@@ -177,13 +177,13 @@ Without N6c, N1d/N5 are too dangerous.
 
 **Exit:** dual-sampler monomorphy active; wall competitive with beta.5; next is NC-2 fillArray / NC-3 density grid.
 
-### Milestone NC-2 — “Own fillArray” (1–2 weeks)
+### Milestone NC-2 — “Own fillArray” — **shipped beta.8**
 
-1. N2a fillAllDirectly  
-2. N2c interpolator fill when child is SpecDensity  
-3. Re-bench  
+1. ~~N2a fillAllDirectly~~ → overwrite `ChunkNoiseSampler#fill` (tight triple loop)  
+2. ~~Indexed `onSampledCellCorners`~~ → interpolator corners + `CellCache` bulk fills  
+3. N2c SpecDensity-aware interpolator fill still optional  
 
-**Exit:** fillArray / slice exclusive down; wall improves again or proves sample still dominates.
+**Exit:** boots clean; `nc1_s2` + NC-2 mixins active; sample still ~70% of L1 (NC-3 next for real sample drop).
 
 ### Milestone NC-3 — “Cell density grid” spike (1 week spike + re-estimate)
 

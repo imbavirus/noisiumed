@@ -17,4 +17,7 @@ public interface DensityInterpolatorAccess {
 
 	@Invoker("interpolateZ")
 	void noisiumed$interpolateZ(double deltaZ);
+
+	@Invoker("onSampledCellCorners")
+	void noisiumed$onSampledCellCorners(int cellY, int cellZ);
 }
