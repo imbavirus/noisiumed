@@ -7,10 +7,18 @@
   "refmap": "noisiumed-common.refmap.json",
   "mixins": [
     "ChainedBlockSourceMixin",
+    "ChunkNoiseSamplerAccessor",
     "ChunkSectionMixin",
     "GenerationShapeConfigMixin",
+    "NoiseChunkGeneratorBiomeMixin",
     "NoiseChunkGeneratorMixin",
-    "compat.lithium.LithiumNoiseChunkGeneratorMixin"
+    "NoiseChunkGeneratorSurfaceMixin",
+    "compat.lithium.LithiumNoiseChunkGeneratorMixin",
+    "density.BinaryOperationMixin",
+    "density.LinearOperationMixin",
+    "density.RangeChoiceMixin",
+    "density.RegistryEntryHolderMixin",
+    "density.UnaryOperationMixin"
   ],
   "client": [],
   "injectors": {

@@ -10,34 +10,22 @@ import net.minecraft.world.chunk.ReadableContainer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
+import za.co.infernos.noisiumed.biome.BulkBiomeFiller;
+import za.co.infernos.noisiumed.path.PathMetrics;
 
 @Mixin(ChunkSection.class)
 public class ChunkSectionMixin {
-	@Unique
-	private static final int noisium$sliceSize = 4;
-
 	@Shadow
 	private ReadableContainer<RegistryEntry<Biome>> biomeContainer;
 
 	/**
-	 * @author Steveplays28
-	 * @reason Axis order micro-optimisation
+	 * @author Steveplays28, Infernos
+	 * @reason Bulk biome packing (palette + single-biome fast path) instead of 64× raw swap only.
 	 */
 	@Overwrite
 	public void populateBiomes(BiomeSupplier biomeSupplier, MultiNoiseUtil.MultiNoiseSampler sampler, int x, int y, int z) {
 		PalettedContainer<RegistryEntry<Biome>> palettedContainer = this.biomeContainer.slice();
-
-		for (int posY = 0; posY < noisium$sliceSize; ++posY) {
-			for (int posZ = 0; posZ < noisium$sliceSize; ++posZ) {
-				for (int posX = 0; posX < noisium$sliceSize; ++posX) {
-					palettedContainer.swapUnsafe(posX, posY, posZ, biomeSupplier.getBiome(x + posX, y + posY, z + posZ, sampler));
-				}
-			}
-		}
-
-		this.biomeContainer = palettedContainer;
+		this.biomeContainer = BulkBiomeFiller.populate(palettedContainer, biomeSupplier, sampler, x, y, z);
+		PathMetrics.recordBiome();
 	}
 }
-
-

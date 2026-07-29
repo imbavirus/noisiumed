@@ -19,23 +19,21 @@ public abstract class ChainedBlockSourceMixin {
 	private List<ChunkNoiseSampler.BlockStateSampler> samplers;
 
 	/**
-	 * @author Steveplays28
-	 * @reason Micro-optimisation
+	 * @author Steveplays28, Infernos
+	 * @reason Micro-optimisation: indexed List access, early exit.
 	 */
 	@Overwrite
 	@Nullable
 	@SuppressWarnings("ForLoopReplaceableByForEach")
 	public BlockState sample(DensityFunction.NoisePos pos) {
-		final int size = this.samplers.size();
+		final List<ChunkNoiseSampler.BlockStateSampler> local = this.samplers;
+		final int size = local.size();
 		for (int i = 0; i < size; i++) {
-			BlockState blockState = this.samplers.get(i).sample(pos);
-			if (blockState == null) {
-				continue;
+			BlockState blockState = local.get(i).sample(pos);
+			if (blockState != null) {
+				return blockState;
 			}
-
-			return blockState;
 		}
-
 		return null;
 	}
 }

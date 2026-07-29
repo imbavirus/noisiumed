@@ -10,3 +10,25 @@ accessible field net/minecraft/world/chunk/PalettedContainer paletteProvider Lne
 
 accessible class net/minecraft/world/chunk/PalettedContainer$Data
 accessible field net/minecraft/world/chunk/PalettedContainer$Data palette Lnet/minecraft/world/chunk/Palette;
+accessible method net/minecraft/world/chunk/PalettedContainer$Data storage ()Lnet/minecraft/util/collection/PaletteStorage;
+
+# Density hot-path: package-private nested types/fields for @Shadow descriptors
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperation
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperationLike
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperationLike$Type
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$LinearOperation
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$LinearOperation$SpecificType
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$UnaryOperation$Type
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice
+
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$UnaryOperation type Lnet/minecraft/world/gen/densityfunction/DensityFunctionTypes$UnaryOperation$Type;
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$LinearOperation specificType Lnet/minecraft/world/gen/densityfunction/DensityFunctionTypes$LinearOperation$SpecificType;
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$LinearOperation argument D
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperation type Lnet/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperationLike$Type;
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperation argument1 Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperation argument2 Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice input Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice minInclusive D
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice maxExclusive D
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice whenInRange Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice whenOutOfRange Lnet/minecraft/world/gen/densityfunction/DensityFunction;

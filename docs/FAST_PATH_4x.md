@@ -1,0 +1,57 @@
+# Noisiumed 4.x fast path
+
+## Primary target
+
+**Minecraft 1.21.1 / NeoForge 21.1.x** (Infernos pack pin).
+
+## Tiers
+
+| Tier | Behaviour |
+|------|-----------|
+| **L0** | Vanilla `populateNoise` + direct palette write (safe after resize) |
+| **L1** | Direct palette writes during noise loop (no staging materialize), aquifer fluid ticks kept |
+| **Biomes** | Section bulk pack + fixed-biome chunk shortcut |
+| **L2** | Defer WG heightmaps until after `buildSurface` (or empty-surface skip) |
+
+## L1 write path (beta.3+)
+
+1. Cell walk still vanilla (`sampleBlockState` / aquifer / interpolators).  
+2. Non-air results go to **`DirectSectionWriter`**: `palette.index` → re-read `data` → `storage.set`.  
+3. Identity last-state cache for solid runs.  
+4. Counts: inline (non-Lithium) or `calculateCounts()` (Lithium).  
+5. Optional L2 heightmap deferral (default on).
+
+Legacy `StagingSection` (4→8 adaptive pack + materialize) remains in tree but is **not** on the L1 hot path.
+
+## L2 heightmap deferral
+
+`BulkNoiseFiller.DEFER_HEIGHTMAPS_UNTIL_SURFACE = true` (default):
+
+1. L1 fills blocks, marks `ChunkGenAttachment` heightmaps pending  
+2. Surface runs (or is skipped if all empty)  
+3. `DeferredHeightmaps.populateAfterNoise` runs once  
+
+## Metrics (huge-win measurement)
+
+`PathMetrics.snapshot()` / `Noisium.pathMetricsSnapshot()`:
+
+- `l0` / `l1` / `l2` / `l1_fail` / `biome` / `surface_skip`
+- `l1_avg_us` — mean L1 populate wall time
+- `direct_writes` / `sections_touched`
+- `l0_reasons{…}` — why L0 was selected / fallthrough
+
+### How we measure “huge” wins
+
+Prefer **forceload wall time** and **exclusive Spark** frames over MSPT-only or inclusive keyword totals.
+
+Harness: `bench/Run-WorldgenSparkCompare.ps1` records boot/forceload/profile wall clocks and Spark URLs; downloads sampler bins when network allows.
+
+## Density (beta.2)
+
+Parity-preserving micro-opts on hot DF nodes (holder cache, binary/unary/linear/range). **Not** a density graph specializer (Phase 3 plan).
+
+## Out of scope (still)
+
+- Full density-function evaluation rewrite / specializer  
+- Full material-rule surface compiler  
+- NoiseChunk interpolator rewrite (Phase 2 plan)
