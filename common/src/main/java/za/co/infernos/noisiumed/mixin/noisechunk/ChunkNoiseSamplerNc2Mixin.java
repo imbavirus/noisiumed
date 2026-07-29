@@ -39,8 +39,6 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 	@Shadow
 	private int index;
 	@Shadow
-	private int startBlockX;
-	@Shadow
 	private int startBlockY;
 	@Shadow
 	private int startBlockZ;
@@ -55,15 +53,9 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 	@Final
 	private int verticalCellBlockCount;
 	@Shadow
-	@Final
-	private int horizontalCellCount;
-	@Shadow
 	private boolean isSamplingForCaches;
 	@Shadow
 	private long cacheOnceUniqueIndex;
-	@Shadow
-	@Final
-	private DensityFunction.EachApplier interpolationEachApplier;
 
 	/** Shared with NC-1 when present; may be null if NC-1 not applied first. */
 	@Unique
@@ -121,44 +113,6 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 			}
 		}
 		this.index = idx;
-	}
-
-	/**
-	 * Column slice fill for interpolators (start/end density buffers).
-	 *
-	 * @author Infernos
-	 * @reason Indexed interpolator array (no List.Iterator) on the fillArray hot path.
-	 */
-	@Overwrite
-	public void sampleDensity(boolean startColumn, int cellX) {
-		final int cellBlock = this.horizontalCellBlockCount;
-		this.startBlockX = cellX * cellBlock;
-		this.cellBlockX = 0;
-
-		Object[] interps = this.noisiumed$interpolatorArrayNc2;
-		if (interps == null) {
-			interps = this.interpolators.toArray();
-			this.noisiumed$interpolatorArrayNc2 = interps;
-		}
-		final DensityFunction.EachApplier applier = this.interpolationEachApplier;
-		final int zCells = this.horizontalCellCount + 1;
-		final int startZ = this.startCellZ;
-
-		for (int z = 0; z < zCells; z++) {
-			this.startBlockZ = (startZ + z) * cellBlock;
-			this.cellBlockZ = 0;
-			this.cacheOnceUniqueIndex++;
-
-			//noinspection ForLoopReplaceableByForEach
-			for (int i = 0, n = interps.length; i < n; i++) {
-				DensityInterpolatorAccess di = (DensityInterpolatorAccess) interps[i];
-				double[] col = startColumn
-						? di.noisiumed$getStartDensityBuffer()[z]
-						: di.noisiumed$getEndDensityBuffer()[z];
-				di.noisiumed$fill(col, applier);
-			}
-		}
-		this.cacheOnceUniqueIndex++;
 	}
 
 	/**
