@@ -46,6 +46,10 @@ Prefer **forceload wall time** and **exclusive Spark** frames over MSPT-only or 
 
 Harness: `bench/Run-WorldgenSparkCompare.ps1` records boot/forceload/profile wall clocks and Spark URLs; downloads sampler bins when network allows.
 
+### Phase 2A finding (beta.4)
+
+On bare overworld L1, sampled timing shows roughly **~70% sampleBlockState vs ~30% direct writes**. Further huge wins must attack density/NoiseChunk sampling (specializer / cell path), not section packing.
+
 ## Density (beta.2)
 
 Parity-preserving micro-opts on hot DF nodes (holder cache, binary/unary/linear/range). **Not** a density graph specializer (Phase 3 plan).

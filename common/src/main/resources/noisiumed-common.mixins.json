@@ -18,7 +18,8 @@
     "density.LinearOperationMixin",
     "density.RangeChoiceMixin",
     "density.RegistryEntryHolderMixin",
-    "density.UnaryOperationMixin"
+    "density.UnaryOperationMixin",
+    "noisechunk.DensityInterpolatorMixin"
   ],
   "client": [],
   "injectors": {

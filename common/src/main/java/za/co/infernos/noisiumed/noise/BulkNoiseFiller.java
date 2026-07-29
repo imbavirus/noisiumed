@@ -73,6 +73,10 @@ public final class BulkNoiseFiller {
 
 			int totalWrites = 0;
 			int sectionsTouched = 0;
+			// Phase 2A: sample every 8th timed L1 chunk (avoids nanoTime tax on every block).
+			final boolean detailTiming = (PathMetrics.l1ChunksTimed() & 7L) == 0L;
+			long sampleNs = 0L;
+			long writeNs = 0L;
 
 			for (int cellX = 0; cellX < cellWidth; cellX++) {
 				chunkNoiseSampler.sampleEndDensity(cellX);
@@ -110,13 +114,33 @@ public final class BulkNoiseFiller {
 									int blockZInSection = blockZ & 15;
 									chunkNoiseSampler.interpolateZ(blockZ, horizDeltas[cellBlockZ]);
 
-									BlockState state = samplerAccess.noisiumed$sampleBlockState();
+									BlockState state;
+									if (detailTiming) {
+										long tS = System.nanoTime();
+										state = samplerAccess.noisiumed$sampleBlockState();
+										sampleNs += System.nanoTime() - tS;
+									} else {
+										state = samplerAccess.noisiumed$sampleBlockState();
+									}
 
 									if (state == DirectSectionWriter.AIR) {
 										continue;
 									}
 
-									if (state == null) {
+									if (detailTiming) {
+										long tW = System.nanoTime();
+										if (state == null) {
+											writer.setDefaultBlock(
+													blockXInSection, blockYInSection, blockZInSection, defaultBlockState
+											);
+											state = defaultBlockState;
+										} else {
+											writer.setBlockState(
+													blockXInSection, blockYInSection, blockZInSection, state
+											);
+										}
+										writeNs += System.nanoTime() - tW;
+									} else if (state == null) {
 										writer.setDefaultBlock(
 												blockXInSection, blockYInSection, blockZInSection, defaultBlockState
 										);
@@ -158,6 +182,9 @@ public final class BulkNoiseFiller {
 
 			PathMetrics.recordDirectWrites(totalWrites);
 			PathMetrics.recordSectionsTouched(sectionsTouched);
+			if (detailTiming) {
+				PathMetrics.recordSampleWriteNs(sampleNs, writeNs);
+			}
 
 			ChunkGenAttachment.markL1Used(chunk);
 			if (DEFER_HEIGHTMAPS_UNTIL_SURFACE) {

@@ -12,6 +12,24 @@ accessible class net/minecraft/world/chunk/PalettedContainer$Data
 accessible field net/minecraft/world/chunk/PalettedContainer$Data palette Lnet/minecraft/world/chunk/Palette;
 accessible method net/minecraft/world/chunk/PalettedContainer$Data storage ()Lnet/minecraft/util/collection/PaletteStorage;
 
+# DensityInterpolator corner fields (inline lerp overwrite)
+accessible class net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x0y0z0 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x0y0z1 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x1y0z0 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x1y0z1 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x0y1z0 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x0y1z1 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x1y1z0 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x1y1z1 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x0z0 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x1z0 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x0z1 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x1z1 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator z0 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator z1 D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator result D
+
 # Density hot-path: package-private nested types/fields for @Shadow descriptors
 accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperation
 accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$BinaryOperationLike

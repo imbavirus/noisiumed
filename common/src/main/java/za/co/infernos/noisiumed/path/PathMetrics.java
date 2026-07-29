@@ -23,6 +23,8 @@ public final class PathMetrics {
 	private static final LongAdder L1_CHUNKS_TIMED = new LongAdder();
 	private static final LongAdder DIRECT_WRITES = new LongAdder();
 	private static final LongAdder SECTIONS_TOUCHED = new LongAdder();
+	private static final LongAdder SAMPLE_NS = new LongAdder();
+	private static final LongAdder WRITE_NS = new LongAdder();
 
 	private static final LongAdder[] L0_REASONS = new LongAdder[L0Reason.values().length];
 
@@ -81,6 +83,24 @@ public final class PathMetrics {
 		if (count > 0) {
 			SECTIONS_TOUCHED.add(count);
 		}
+	}
+
+	/** Phase 2A: nanoseconds spent in sampleBlockState vs section writes during L1. */
+	public static void recordSampleWriteNs(long sampleNs, long writeNs) {
+		if (sampleNs > 0) {
+			SAMPLE_NS.add(sampleNs);
+		}
+		if (writeNs > 0) {
+			WRITE_NS.add(writeNs);
+		}
+	}
+
+	public static long sampleNs() {
+		return SAMPLE_NS.sum();
+	}
+
+	public static long writeNs() {
+		return WRITE_NS.sum();
 	}
 
 	public static long l0() {
@@ -145,6 +165,13 @@ public final class PathMetrics {
 		}
 		sb.append(" direct_writes=").append(directWrites())
 				.append(" sections_touched=").append(sectionsTouched());
+		long sn = sampleNs();
+		long wn = writeNs();
+		long totalSw = sn + wn;
+		if (totalSw > 0) {
+			sb.append(" sample_pct=").append((sn * 100L) / totalSw)
+					.append(" write_pct=").append((wn * 100L) / totalSw);
+		}
 		sb.append(" l0_reasons{");
 		boolean first = true;
 		for (L0Reason r : L0Reason.values()) {
@@ -173,6 +200,8 @@ public final class PathMetrics {
 		L1_CHUNKS_TIMED.reset();
 		DIRECT_WRITES.reset();
 		SECTIONS_TOUCHED.reset();
+		SAMPLE_NS.reset();
+		WRITE_NS.reset();
 		for (LongAdder a : L0_REASONS) {
 			a.reset();
 		}
