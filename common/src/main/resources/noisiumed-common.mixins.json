@@ -27,7 +27,9 @@
     "noisechunk.ChunkNoiseSamplerNc2Mixin",
     "noisechunk.ChunkNoiseSamplerNc3Mixin",
     "noisechunk.CellCacheAccess",
-    "noisechunk.AquiferImplAccess"
+    "noisechunk.AquiferImplAccess",
+    "noisechunk.ChunkNoiseSamplerFlagsAccess",
+    "noisechunk.OreVeinSamplerMixin"
   ],
   "client": [],
   "injectors": {

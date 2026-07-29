@@ -81,7 +81,7 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 	 * Mojmap: {@code fillAllDirectly}.
 	 *
 	 * @author Infernos
-	 * @reason Tighter cell fill loop for CacheAllInCell / bulk density.
+	 * @reason Tighter cell fill loop; monomorphic SpecDensity sample call site.
 	 */
 	@Overwrite
 	public void fill(double[] densities, DensityFunction function) {
@@ -89,17 +89,69 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 		final int cellH = this.verticalCellBlockCount;
 		final int cellW = this.horizontalCellBlockCount;
 		int idx = 0;
-		for (int y = cellH - 1; y >= 0; y--) {
-			this.cellBlockY = y;
-			for (int x = 0; x < cellW; x++) {
-				this.cellBlockX = x;
-				for (int z = 0; z < cellW; z++) {
-					this.cellBlockZ = z;
-					densities[idx++] = function.sample(self);
+		if (function instanceof za.co.infernos.noisiumed.density.special.SpecDensity spec) {
+			for (int y = cellH - 1; y >= 0; y--) {
+				this.cellBlockY = y;
+				for (int x = 0; x < cellW; x++) {
+					this.cellBlockX = x;
+					for (int z = 0; z < cellW; z++) {
+						this.cellBlockZ = z;
+						densities[idx++] = spec.sample(self);
+					}
+				}
+			}
+		} else {
+			for (int y = cellH - 1; y >= 0; y--) {
+				this.cellBlockY = y;
+				for (int x = 0; x < cellW; x++) {
+					this.cellBlockX = x;
+					for (int z = 0; z < cellW; z++) {
+						this.cellBlockZ = z;
+						densities[idx++] = function.sample(self);
+					}
 				}
 			}
 		}
 		this.index = idx;
+	}
+
+	/**
+	 * Column slice fill for interpolators (start/end density buffers).
+	 *
+	 * @author Infernos
+	 * @reason Indexed interpolator array (no List.Iterator) on the fillArray hot path.
+	 */
+	@Overwrite
+	public void sampleDensity(boolean startColumn, int cellX) {
+		final ChunkNoiseSamplerFlagsAccess flags = (ChunkNoiseSamplerFlagsAccess) (Object) this;
+		final int cellBlock = flags.noisiumed$getHorizontalCellBlockCount();
+		flags.noisiumed$setStartBlockX(cellX * cellBlock);
+		flags.noisiumed$setCellBlockX(0);
+
+		Object[] interps = this.noisiumed$interpolatorArrayNc2;
+		if (interps == null) {
+			interps = this.interpolators.toArray();
+			this.noisiumed$interpolatorArrayNc2 = interps;
+		}
+		final DensityFunction.EachApplier applier = flags.noisiumed$getInterpolationEachApplier();
+		final int zCells = flags.noisiumed$getHorizontalCellCount() + 1;
+		final int startZ = flags.noisiumed$getStartCellZ();
+
+		for (int z = 0; z < zCells; z++) {
+			flags.noisiumed$setStartBlockZ((startZ + z) * cellBlock);
+			flags.noisiumed$setCellBlockZ(0);
+			flags.noisiumed$setCacheOnceUniqueIndex(flags.noisiumed$getCacheOnceUniqueIndex() + 1L);
+
+			//noinspection ForLoopReplaceableByForEach
+			for (int i = 0, n = interps.length; i < n; i++) {
+				DensityInterpolatorAccess di = (DensityInterpolatorAccess) interps[i];
+				double[] col = startColumn
+						? di.noisiumed$getStartDensityBuffer()[z]
+						: di.noisiumed$getEndDensityBuffer()[z];
+				di.noisiumed$fill(col, applier);
+			}
+		}
+		flags.noisiumed$setCacheOnceUniqueIndex(flags.noisiumed$getCacheOnceUniqueIndex() + 1L);
 	}
 
 	/**

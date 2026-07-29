@@ -58,3 +58,21 @@ accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$Ra
 accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice maxExclusive D
 accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice whenInRange Lnet/minecraft/world/gen/densityfunction/DensityFunction;
 accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$RangeChoice whenOutOfRange Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+
+# NC-5: interpolator slice fill + monomorphic ore
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator delegate Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator startDensityBuffer [[D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator endDensityBuffer [[D
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator field_34622 Lnet/minecraft/world/gen/chunk/ChunkNoiseSampler;
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler isSamplingForCaches Z
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler interpolationEachApplier Lnet/minecraft/world/gen/densityfunction/DensityFunction$EachApplier;
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler horizontalCellCount I
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler startCellZ I
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler cacheOnceUniqueIndex J
+accessible method net/minecraft/world/gen/chunk/ChunkNoiseSampler sampleDensity (ZI)V
+accessible field net/minecraft/world/gen/OreVeinSampler$VeinType ore Lnet/minecraft/block/BlockState;
+accessible field net/minecraft/world/gen/OreVeinSampler$VeinType rawOreBlock Lnet/minecraft/block/BlockState;
+accessible field net/minecraft/world/gen/OreVeinSampler$VeinType stone Lnet/minecraft/block/BlockState;
+accessible field net/minecraft/world/gen/OreVeinSampler$VeinType minY I
+accessible field net/minecraft/world/gen/OreVeinSampler$VeinType maxY I
+

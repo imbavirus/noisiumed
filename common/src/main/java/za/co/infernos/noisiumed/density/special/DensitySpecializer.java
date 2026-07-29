@@ -29,6 +29,9 @@ public final class DensitySpecializer {
 		if (function instanceof DensityFunctionTypes.BinaryOperation binary) {
 			return specializeBinary(binary);
 		}
+		if (function instanceof DensityFunctionTypes.RangeChoice range) {
+			return specializeRange(range);
+		}
 		return function;
 	}
 
@@ -80,5 +83,22 @@ public final class DensitySpecializer {
 			PathMetrics.recordSpecialize();
 		}
 		return out;
+	}
+
+	private static DensityFunction specializeRange(DensityFunctionTypes.RangeChoice range) {
+		DensityFunction input = specialize(range.input());
+		DensityFunction whenIn = specialize(range.whenInRange());
+		DensityFunction whenOut = specialize(range.whenOutOfRange());
+		PathMetrics.recordSpecialize();
+		return new RangeSpecs.Choice(
+				range,
+				input,
+				range.minInclusive(),
+				range.maxExclusive(),
+				whenIn,
+				whenOut,
+				range.minValue(),
+				range.maxValue()
+		);
 	}
 }

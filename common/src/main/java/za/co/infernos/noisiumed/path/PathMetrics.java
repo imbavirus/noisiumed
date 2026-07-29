@@ -30,6 +30,7 @@ public final class PathMetrics {
 	private static final LongAdder NC1_SAMPLER_2 = new LongAdder();
 	private static final LongAdder NC1_SAMPLER_3 = new LongAdder();
 	private static final LongAdder NC3_CELL_GRID = new LongAdder();
+	private static final LongAdder NC5_ORE = new LongAdder();
 
 	private static final LongAdder[] L0_REASONS = new LongAdder[L0Reason.values().length];
 
@@ -130,6 +131,11 @@ public final class PathMetrics {
 		NC3_CELL_GRID.increment();
 	}
 
+	/** NC-5 monomorphic ore vein sampler installs. */
+	public static void recordNc5Ore() {
+		NC5_ORE.increment();
+	}
+
 	public static long l0() {
 		return L0.sum();
 	}
@@ -203,7 +209,8 @@ public final class PathMetrics {
 		sb.append(" nc1_s1=").append(NC1_SAMPLER_1.sum())
 				.append(" nc1_s2=").append(NC1_SAMPLER_2.sum())
 				.append(" nc1_s3=").append(NC1_SAMPLER_3.sum())
-				.append(" nc3_grid=").append(NC3_CELL_GRID.sum());
+				.append(" nc3_grid=").append(NC3_CELL_GRID.sum())
+				.append(" nc5_ore=").append(NC5_ORE.sum());
 		sb.append(" l0_reasons{");
 		boolean first = true;
 		for (L0Reason r : L0Reason.values()) {
@@ -239,6 +246,7 @@ public final class PathMetrics {
 		NC1_SAMPLER_2.reset();
 		NC1_SAMPLER_3.reset();
 		NC3_CELL_GRID.reset();
+		NC5_ORE.reset();
 		for (LongAdder a : L0_REASONS) {
 			a.reset();
 		}

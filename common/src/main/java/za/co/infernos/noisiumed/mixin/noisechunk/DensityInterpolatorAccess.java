@@ -1,6 +1,8 @@
 package za.co.infernos.noisiumed.mixin.noisechunk;
 
+import net.minecraft.world.gen.densityfunction.DensityFunction;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
 /**
@@ -20,4 +22,16 @@ public interface DensityInterpolatorAccess {
 
 	@Invoker("onSampledCellCorners")
 	void noisiumed$onSampledCellCorners(int cellY, int cellZ);
+
+	@Invoker("fill")
+	void noisiumed$fill(double[] densities, DensityFunction.EachApplier applier);
+
+	@Accessor("startDensityBuffer")
+	double[][] noisiumed$getStartDensityBuffer();
+
+	@Accessor("endDensityBuffer")
+	double[][] noisiumed$getEndDensityBuffer();
+
+	@Accessor("delegate")
+	DensityFunction noisiumed$getDelegate();
 }

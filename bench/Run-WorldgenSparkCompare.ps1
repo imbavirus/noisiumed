@@ -280,9 +280,9 @@ function Run-SparkWorldgen {
 }
 
 $sparkJar = Join-Path $jars "spark-1.10.124-neoforge.jar"
-$noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.10-neoforge-1.21.1.jar"
+$noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.11-neoforge-1.21.1.jar"
 if (-not (Test-Path $noisiumedJar)) {
-  $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.9-neoforge-1.21.1.jar"
+  $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.10-neoforge-1.21.1.jar"
 }
 $fnJar = Join-Path $jars "zfastnoise-1.0.13+1.21.1+neoforge.jar"
 

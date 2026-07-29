@@ -26,7 +26,10 @@ public abstract class RegistryEntryHolderMixin implements DensityFunction {
 	private DensityFunction noisiumed$resolve() {
 		DensityFunction resolved = this.noisiumed$resolved;
 		if (resolved == null) {
-			resolved = this.function.value();
+			// Specialize hot arithmetic under holders once (Ap2/RangeChoice often live here).
+			resolved = za.co.infernos.noisiumed.density.special.DensitySpecializer.specialize(
+					this.function.value()
+			);
 			this.noisiumed$resolved = resolved;
 		}
 		return resolved;
