@@ -55,8 +55,17 @@ On bare overworld L1, sampled timing shows roughly **~70% sampleBlockState vs ~3
 - **beta.2** — leaf mixins (holder cache, binary/unary/linear/range)
 - **beta.5** — **specializer**: after `getActualDensityFunctionImpl`, rewrite Unary/Linear/Binary to monomorphic `SpecDensity` types (Abs, MulConst, Add, …)
 
+## Surface / coverage (beta.6)
+
+- L1 attaches **column bits** + **has-solid**; empty L1 chunks skip `buildSurface` without section scan  
+- L1 generator allowlist: `-Dnoisiumed.l1.generator.allowlist=fqcn1,fqcn2`
+
+## Next campaign
+
+See **[NOISECHUNK_DOMINATION.md](./NOISECHUNK_DOMINATION.md)** — sample path / BlockStateFiller / cell fillArray.
+
 ## Out of scope (still)
 
 - Noise sampler / Perlin rewrite  
 - Full material-rule surface compiler  
-- Aquifer BlockStateFiller replacement
+- Aquifer math rewrite without golden parity

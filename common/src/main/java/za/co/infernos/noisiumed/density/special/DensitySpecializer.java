@@ -37,8 +37,7 @@ public final class DensitySpecializer {
 		double min = unary.minValue();
 		double max = unary.maxValue();
 		int ord = unary.type().ordinal();
-		PathMetrics.recordSpecialize();
-		return switch (ord) {
+		DensityFunction out = switch (ord) {
 			case 0 -> new UnarySpecs.Abs(unary, input, min, max);
 			case 1 -> new UnarySpecs.Square(unary, input, min, max);
 			case 2 -> new UnarySpecs.Cube(unary, input, min, max);
@@ -47,6 +46,10 @@ public final class DensitySpecializer {
 			case 5 -> new UnarySpecs.Squeeze(unary, input, min, max);
 			default -> unary;
 		};
+		if (out != unary) {
+			PathMetrics.recordSpecialize();
+		}
+		return out;
 	}
 
 	private static DensityFunction specializeLinear(DensityFunctionTypes.LinearOperation linear) {
@@ -66,13 +69,16 @@ public final class DensitySpecializer {
 		DensityFunction b = specialize(binary.argument2());
 		double min = binary.minValue();
 		double max = binary.maxValue();
-		PathMetrics.recordSpecialize();
-		return switch (binary.type().ordinal()) {
+		DensityFunction out = switch (binary.type().ordinal()) {
 			case 0 -> new BinarySpecs.Add(binary, a, b, min, max);
 			case 1 -> new BinarySpecs.Mul(binary, a, b, min, max);
 			case 2 -> new BinarySpecs.Min(binary, a, b, min, max);
 			case 3 -> new BinarySpecs.Max(binary, a, b, min, max);
 			default -> binary;
 		};
+		if (out != binary) {
+			PathMetrics.recordSpecialize();
+		}
+		return out;
 	}
 }

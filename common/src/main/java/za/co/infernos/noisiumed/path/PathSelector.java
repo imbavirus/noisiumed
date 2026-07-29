@@ -7,6 +7,7 @@ import net.minecraft.world.chunk.SingularPalette;
 import net.minecraft.world.gen.chunk.NoiseChunkGenerator;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import za.co.infernos.noisiumed.config.NoisiumedConfig;
 
 /**
  * Chooses an optimisation tier. Prefer high coverage (L1) over all-or-nothing empty-only paths.
@@ -35,8 +36,9 @@ public final class PathSelector {
 		if (chunk.hasBelowZeroRetrogen()) {
 			return Decision.l0(L0Reason.BELOW_ZERO_RETROGEN);
 		}
-		// Exact vanilla noise generator only (subclasses stay L0 until allowlisted).
-		if (generatorRuntimeClass != NoiseChunkGenerator.class) {
+		// Exact vanilla noise generator, or FQCN on the L1 allowlist (Phase 5).
+		if (generatorRuntimeClass != NoiseChunkGenerator.class
+				&& !NoisiumedConfig.isL1GeneratorAllowed(generatorRuntimeClass)) {
 			return Decision.l0(L0Reason.NON_VANILLA_GENERATOR);
 		}
 		if (!isBulkFillSafe(chunk)) {

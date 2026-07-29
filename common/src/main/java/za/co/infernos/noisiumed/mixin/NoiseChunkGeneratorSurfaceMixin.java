@@ -18,7 +18,7 @@ import za.co.infernos.noisiumed.path.PathTier;
 /**
  * L2 surface path:
  * <ul>
- *   <li>Skip {@code buildSurface} when every section is empty</li>
+ *   <li>Skip {@code buildSurface} when L1 wrote no solids (column mask) or every section is empty</li>
  *   <li>After surface (or skip), flush deferred WG heightmaps from L1 noise fill</li>
  * </ul>
  */
@@ -36,6 +36,15 @@ public class NoiseChunkGeneratorSurfaceMixin {
 			Chunk chunk,
 			CallbackInfo ci
 	) {
+		// Fast path: L1 already knows whether any non-air was written.
+		if (ChunkGenAttachment.wasL1Used(chunk) && !ChunkGenAttachment.l1HasSolid(chunk)) {
+			PathMetrics.recordSurfaceSkip();
+			PathMetrics.record(PathTier.L2);
+			finalizeDeferredHeightmaps(chunk);
+			ci.cancel();
+			return;
+		}
+
 		ChunkSection[] sections = chunk.getSectionArray();
 		boolean allEmpty = true;
 		for (ChunkSection section : sections) {

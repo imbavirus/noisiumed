@@ -167,11 +167,19 @@ public final class BulkNoiseFiller {
 
 			chunkNoiseSampler.stopInterpolation();
 
+			long[] chunkColumns = pool.columnBits;
+			chunkColumns[0] = chunkColumns[1] = chunkColumns[2] = chunkColumns[3] = 0L;
+
 			for (int i = 0; i < sectionCount; i++) {
 				DirectSectionWriter writer = pool.sectionWriters[i];
 				if (writer != null && writer.isDirty()) {
 					sectionsTouched++;
 					totalWrites += writer.writes();
+					long[] sec = writer.columnBits();
+					chunkColumns[0] |= sec[0];
+					chunkColumns[1] |= sec[1];
+					chunkColumns[2] |= sec[2];
+					chunkColumns[3] |= sec[3];
 					if (updateCountsInline) {
 						writer.applyCountsInline();
 					} else {
@@ -187,6 +195,10 @@ public final class BulkNoiseFiller {
 			}
 
 			ChunkGenAttachment.markL1Used(chunk);
+			ChunkGenAttachment.setColumnBits(chunk, chunkColumns);
+			if (totalWrites > 0) {
+				ChunkGenAttachment.markL1HasSolid(chunk);
+			}
 			if (DEFER_HEIGHTMAPS_UNTIL_SURFACE) {
 				ChunkGenAttachment.markHeightmapsPending(chunk);
 			} else {
