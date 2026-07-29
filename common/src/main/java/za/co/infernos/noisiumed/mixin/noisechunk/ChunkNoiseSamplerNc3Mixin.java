@@ -133,7 +133,7 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 
 	/**
 	 * @author Infernos
-	 * @reason Cell-cache density + monomorphic aquifer; optional secondary (ore veins).
+	 * @reason Cell-cache density + solid early-out + monomorphic aquifer; optional ore veins.
 	 */
 	@Overwrite
 	@Nullable
@@ -148,6 +148,18 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 			// Same layout as CacheAllInCell / fillAllDirectly (y high→low, then x, then z).
 			final double density = cache[((h - 1 - j) * w + i) * w + k];
 			final ChunkNoiseSampler self = (ChunkNoiseSampler) (Object) this;
+
+			// NC-4: vanilla NoiseBasedAquifer returns null immediately when density > 0 (solid).
+			// Skip the full aquifer implementation; clear fluid-tick flag for parity.
+			if (density > 0.0) {
+				AquiferSampler aquifer = this.aquiferSampler;
+				if (aquifer instanceof AquiferImplAccess access) {
+					access.noisiumed$setNeedsFluidTick(false);
+				}
+				ChunkNoiseSampler.BlockStateSampler secondary = this.noisiumed$secondarySampler;
+				return secondary != null ? secondary.sample(self) : null;
+			}
+
 			BlockState state = this.aquiferSampler.apply(self, density);
 			if (state != null) {
 				return state;
@@ -161,3 +173,4 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 		return this.blockStateSampler.sample((ChunkNoiseSampler) (Object) this);
 	}
 }
+
