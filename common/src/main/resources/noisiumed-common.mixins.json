@@ -7,6 +7,7 @@
   "refmap": "noisiumed-common.refmap.json",
   "mixins": [
     "ChainedBlockSourceMixin",
+    "ChainedBlockSourceAccessor",
     "ChunkNoiseSamplerAccessor",
     "ChunkSectionMixin",
     "GenerationShapeConfigMixin",
@@ -20,7 +21,9 @@
     "density.RegistryEntryHolderMixin",
     "density.UnaryOperationMixin",
     "noisechunk.DensityInterpolatorMixin",
-    "noisechunk.ChunkNoiseSamplerSpecializeMixin"
+    "noisechunk.DensityInterpolatorAccess",
+    "noisechunk.ChunkNoiseSamplerSpecializeMixin",
+    "noisechunk.ChunkNoiseSamplerNc1Mixin"
   ],
   "client": [],
   "injectors": {

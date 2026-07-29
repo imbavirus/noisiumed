@@ -168,15 +168,14 @@ Without N6c, N1d/N5 are too dangerous.
 
 ## Recommended campaign (milestones)
 
-### Milestone NC-1 — “Own the sampler” (1–2 weeks)
+### Milestone NC-1 — “Own the sampler” — **shipped beta.7**
 
-1. N6a/N6b instrumentation  
-2. N1a monomorphic BlockStateFiller (list 1–3)  
-3. N1b aquifers-disabled short path  
-4. N3b interpolator array cache  
-5. Bench vs FN + vs beta.5/6  
+1. ~~N1a monomorphic BlockStateFiller (list 1–3)~~ → `FastSingle/Dual/TripleBlockSampler` after `ChunkNoiseSampler` ctor  
+2. ~~N3b interpolator array cache~~ → indexed `interpolateY/X/Z`  
+3. Metrics: `nc1_s1/s2/s3` (overworld typically **nc1_s2** with ore veins)  
+4. Note: aquifers-off short path still TODO (N1b); sample still ~65% of timed L1 block work  
 
-**Exit:** clear drop in exclusive `sampleBlockState`; wall ≤ beta.5; parity OK.
+**Exit:** dual-sampler monomorphy active; wall competitive with beta.5; next is NC-2 fillArray / NC-3 density grid.
 
 ### Milestone NC-2 — “Own fillArray” (1–2 weeks)
 

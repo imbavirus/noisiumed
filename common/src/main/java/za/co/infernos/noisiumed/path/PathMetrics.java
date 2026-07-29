@@ -26,6 +26,9 @@ public final class PathMetrics {
 	private static final LongAdder SAMPLE_NS = new LongAdder();
 	private static final LongAdder WRITE_NS = new LongAdder();
 	private static final LongAdder SPECIALIZE = new LongAdder();
+	private static final LongAdder NC1_SAMPLER_1 = new LongAdder();
+	private static final LongAdder NC1_SAMPLER_2 = new LongAdder();
+	private static final LongAdder NC1_SAMPLER_3 = new LongAdder();
 
 	private static final LongAdder[] L0_REASONS = new LongAdder[L0Reason.values().length];
 
@@ -112,6 +115,16 @@ public final class PathMetrics {
 		return SPECIALIZE.sum();
 	}
 
+	/** NC-1 monomorphic sampler installs (1/2/3-long chains). */
+	public static void recordNc1Sampler(int chainLen) {
+		switch (chainLen) {
+			case 1 -> NC1_SAMPLER_1.increment();
+			case 2 -> NC1_SAMPLER_2.increment();
+			case 3 -> NC1_SAMPLER_3.increment();
+			default -> {}
+		}
+	}
+
 	public static long l0() {
 		return L0.sum();
 	}
@@ -182,6 +195,9 @@ public final class PathMetrics {
 					.append(" write_pct=").append((wn * 100L) / totalSw);
 		}
 		sb.append(" specialize=").append(specializeCount());
+		sb.append(" nc1_s1=").append(NC1_SAMPLER_1.sum())
+				.append(" nc1_s2=").append(NC1_SAMPLER_2.sum())
+				.append(" nc1_s3=").append(NC1_SAMPLER_3.sum());
 		sb.append(" l0_reasons{");
 		boolean first = true;
 		for (L0Reason r : L0Reason.values()) {
@@ -213,6 +229,9 @@ public final class PathMetrics {
 		SAMPLE_NS.reset();
 		WRITE_NS.reset();
 		SPECIALIZE.reset();
+		NC1_SAMPLER_1.reset();
+		NC1_SAMPLER_2.reset();
+		NC1_SAMPLER_3.reset();
 		for (LongAdder a : L0_REASONS) {
 			a.reset();
 		}
