@@ -8,11 +8,13 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import za.co.infernos.noisiumed.config.NoisiumedConfig;
 import za.co.infernos.noisiumed.noise.sampler.FastOreVeinSampler;
 import za.co.infernos.noisiumed.path.PathMetrics;
 
 /**
  * NC-5 / A3: replace OreVeinSampler lambda with monomorphic {@link FastOreVeinSampler}.
+ * Disable: {@code -Dnoisiumed.fast.ore=false}
  */
 @Mixin(OreVeinSampler.class)
 public abstract class OreVeinSamplerMixin {
@@ -24,6 +26,9 @@ public abstract class OreVeinSamplerMixin {
 			RandomSplitter randomSplitter,
 			CallbackInfoReturnable<ChunkNoiseSampler.BlockStateSampler> cir
 	) {
+		if (!NoisiumedConfig.fastOre()) {
+			return;
+		}
 		cir.setReturnValue(new FastOreVeinSampler(veinToggle, veinRidged, veinGap, randomSplitter));
 		PathMetrics.recordNc5Ore();
 	}

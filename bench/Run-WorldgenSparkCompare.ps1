@@ -47,6 +47,7 @@ function Prepare-ServerDir {
 -Dfile.encoding=UTF-8
 "@
   Set-Content -Path (Join-Path $dir "eula.txt") -Value "eula=true"
+  # max-tick-time=-1 disables ServerWatchdog (forceload can block main thread >60s).
   Set-Content -Path (Join-Path $dir "server.properties") -Value @"
 server-port=$Port
 online-mode=false
@@ -70,6 +71,7 @@ enable-rcon=true
 rcon.port=$RPort
 rcon.password=$RconPassword
 broadcast-rcon-to-ops=true
+max-tick-time=-1
 "@
   foreach ($m in $ModJars) { Copy-Item $m (Join-Path $dir "mods") -Force }
   return $dir
@@ -280,7 +282,10 @@ function Run-SparkWorldgen {
 }
 
 $sparkJar = Join-Path $jars "spark-1.10.124-neoforge.jar"
-$noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.11-neoforge-1.21.1.jar"
+$noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.12-neoforge-1.21.1.jar"
+if (-not (Test-Path $noisiumedJar)) {
+  $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.11-neoforge-1.21.1.jar"
+}
 if (-not (Test-Path $noisiumedJar)) {
   $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.10-neoforge-1.21.1.jar"
 }

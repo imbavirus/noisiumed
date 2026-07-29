@@ -198,6 +198,15 @@ Without N6c, N1d/N5 are too dangerous.
 
 N4\* after exclusive profiles demand it.
 
+### Milestone NC-6 — Parity + open aquifer (beta.12)
+
+1. Golden section hash harness: `bench/Run-ParityHash.ps1` + `parity_hash.py`  
+2. Aquifer density specialize at Impl ctor (`-Dnoisiumed.aquifer.specialize`)  
+3. Ore monomorphy toggle (`-Dnoisiumed.fast.ore`)  
+4. Harness `max-tick-time=-1`  
+
+**Gate for any future sampleDensity rewrite:** parity harness must PASS.
+
 ---
 
 ## What not to do

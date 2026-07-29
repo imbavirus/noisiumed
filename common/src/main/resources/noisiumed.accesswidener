@@ -69,3 +69,17 @@ accessible field net/minecraft/world/gen/OreVeinSampler$VeinType stone Lnet/mine
 accessible field net/minecraft/world/gen/OreVeinSampler$VeinType minY I
 accessible field net/minecraft/world/gen/OreVeinSampler$VeinType maxY I
 
+# NC-6: aquifer density specialize (mutable finals)
+mutable field net/minecraft/world/gen/chunk/AquiferSampler$Impl barrierNoise Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+mutable field net/minecraft/world/gen/chunk/AquiferSampler$Impl fluidLevelFloodednessNoise Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+mutable field net/minecraft/world/gen/chunk/AquiferSampler$Impl fluidLevelSpreadNoise Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+mutable field net/minecraft/world/gen/chunk/AquiferSampler$Impl fluidTypeNoise Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+mutable field net/minecraft/world/gen/chunk/AquiferSampler$Impl erosionDensityFunction Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+mutable field net/minecraft/world/gen/chunk/AquiferSampler$Impl depthDensityFunction Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/chunk/AquiferSampler$Impl barrierNoise Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/chunk/AquiferSampler$Impl fluidLevelFloodednessNoise Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/chunk/AquiferSampler$Impl fluidLevelSpreadNoise Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/chunk/AquiferSampler$Impl fluidTypeNoise Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/chunk/AquiferSampler$Impl erosionDensityFunction Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible field net/minecraft/world/gen/chunk/AquiferSampler$Impl depthDensityFunction Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+

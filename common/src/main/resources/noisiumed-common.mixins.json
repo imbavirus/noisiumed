@@ -28,6 +28,7 @@
     "noisechunk.ChunkNoiseSamplerNc3Mixin",
     "noisechunk.CellCacheAccess",
     "noisechunk.AquiferImplAccess",
+    "noisechunk.AquiferImplSpecializeMixin",
     "noisechunk.ChunkNoiseSamplerFlagsAccess",
     "noisechunk.OreVeinSamplerMixin"
   ],

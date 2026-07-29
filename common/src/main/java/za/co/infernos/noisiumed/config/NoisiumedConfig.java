@@ -30,6 +30,18 @@ public final class NoisiumedConfig {
 	 */
 	private static final boolean CELL_DENSITY_GRID = parseBool("noisiumed.cell.density.grid", "NOISIUMED_CELL_DENSITY_GRID", true);
 
+	/**
+	 * NC-5 monomorphic ore sampler. Disable with {@code -Dnoisiumed.fast.ore=false} for A/B.
+	 */
+	private static final boolean FAST_ORE = parseBool("noisiumed.fast.ore", "NOISIUMED_FAST_ORE", true);
+
+	/**
+	 * Specialize aquifer density nodes (barrier/floodedness/spread/type/erosion/depth).
+	 * Disable with {@code -Dnoisiumed.aquifer.specialize=false}.
+	 */
+	private static final boolean AQUIFER_SPECIALIZE = parseBool(
+			"noisiumed.aquifer.specialize", "NOISIUMED_AQUIFER_SPECIALIZE", true);
+
 	private NoisiumedConfig() {}
 
 	public static @NotNull Set<String> l1GeneratorAllowlist() {
@@ -38,6 +50,14 @@ public final class NoisiumedConfig {
 
 	public static boolean cellDensityGrid() {
 		return CELL_DENSITY_GRID;
+	}
+
+	public static boolean fastOre() {
+		return FAST_ORE;
+	}
+
+	public static boolean aquiferSpecialize() {
+		return AQUIFER_SPECIALIZE;
 	}
 
 	public static boolean isL1GeneratorAllowed(@NotNull Class<?> generatorRuntimeClass) {
