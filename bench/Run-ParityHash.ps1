@@ -5,7 +5,7 @@
   vs Noisiumed, hash overworld block sections, compare.
 
 .EXAMPLE
-  .\Run-ParityHash.ps1 -Radius 2 -Seed 12345
+  .\Run-ParityHash.ps1 -RadiusChunks 2 -Seed 12345
 #>
 param(
   [string]$BenchRoot = $PSScriptRoot,
@@ -15,8 +15,7 @@ param(
   [int]$Seed = 12345,
   [int]$ServerPort = 25580,
   [int]$RconPort = 25585,
-  [string]$RconPassword = "benchparity",
-  [int]$ReadyTimeoutSec = 180
+  [string]$RconPassword = "benchparity"
 )
 
 $ErrorActionPreference = "Stop"
@@ -61,7 +60,6 @@ function Prepare-ParityDir {
 -Dfile.encoding=UTF-8
 "@
   Set-Content -Path (Join-Path $dir "eula.txt") -Value "eula=true"
-  # max-tick-time=-1 disables watchdog (needed when main thread waits on gen)
   Set-Content -Path (Join-Path $dir "server.properties") -Value @"
 server-port=$Port
 online-mode=false
@@ -91,100 +89,121 @@ max-tick-time=-1
   return $dir
 }
 
-function Wait-ServerReady([System.Diagnostics.Process]$Proc, [string]$LogPath, [int]$TimeoutSec) {
-  $deadline = (Get-Date).AddSeconds($TimeoutSec)
-  while ((Get-Date) -lt $deadline) {
-    if ($Proc.HasExited) { throw "Server exited early code=$($Proc.ExitCode)" }
-    if (Test-Path $LogPath) {
-      $hit = Select-String -Path $LogPath -Pattern 'Done \(|RCON running' -SimpleMatch:$false -ErrorAction SilentlyContinue
-      if ($hit) { return }
-    }
-    Start-Sleep -Milliseconds 500
+function Stop-ParityProcess([System.Diagnostics.Process]$p) {
+  if ($null -eq $p) { return }
+  if (-not $p.HasExited) {
+    try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
+    # also kill child java
+    Get-CimInstance Win32_Process -Filter "Name='java.exe'" -ErrorAction SilentlyContinue |
+      Where-Object { $_.CommandLine -match 'run-parity-' } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   }
-  throw "Timeout waiting for server ready"
 }
 
 function Run-ParityGen {
   param([string]$Label, [string[]]$ModJars, [int]$Port, [int]$RPort)
 
   $dir = Prepare-ParityDir -Name $Label -ModJars $ModJars -Port $Port -RPort $RPort
-  $logPath = Join-Path $dir "logs\latest.log"
   $console = Join-Path $results "parity-$Label-console.log"
   if (Test-Path $console) { Remove-Item $console -Force }
 
-  $psi = New-Object System.Diagnostics.ProcessStartInfo
-  $psi.FileName = $Java
-  $psi.WorkingDirectory = $dir
-  $psi.Arguments = "@user_jvm_args.txt $nfArgsAt nogui"
-  $psi.UseShellExecute = $false
-  $psi.RedirectStandardOutput = $true
-  $psi.RedirectStandardError = $true
-  $psi.CreateNoWindow = $true
-  $proc = New-Object System.Diagnostics.Process
-  $proc.StartInfo = $psi
-  $null = $proc.Start()
-  $outJob = Start-Job -ScriptBlock {
-    param($p, $f)
-    while (-not $p.HasExited) {
-      $line = $p.StandardOutput.ReadLine()
-      if ($null -ne $line) { Add-Content -Path $f -Value $line }
-    }
-  } -ArgumentList $proc, $console
+  $argLine = "@user_jvm_args.txt $nfArgsAt nogui"
+  $bat = Join-Path $dir "start-parity.cmd"
+  @"
+@echo off
+"$Java" $argLine > "$console" 2>&1
+"@ | Set-Content -Path $bat -Encoding ascii
 
-  try {
-    Write-Host "==== parity $Label starting :$Port ====" -ForegroundColor Cyan
-    Wait-ServerReady -Proc $proc -LogPath $logPath -TimeoutSec $ReadyTimeoutSec
-    Start-Sleep -Seconds 2
+  Write-Host "==== parity $Label starting :$Port ====" -ForegroundColor Cyan
+  $p = Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$bat`"" -WorkingDirectory $dir -PassThru -WindowStyle Hidden
 
-    # forceload radius around origin (block coords)
-    $b0 = -16 * $RadiusChunks
-    $b1 = 16 * $RadiusChunks + 15
-    $cmd = "forceload add $b0 $b0 $b1 $b1"
-    Write-Host ">> $cmd"
-    Invoke-RconLocal -Port $RPort -Command $cmd | Out-Null
-
-    # wait until chunks present: poll region file growth / sleep
-    $deadline = (Get-Date).AddSeconds(300)
-    $regionDir = Join-Path $dir "world\region"
-    while ((Get-Date) -lt $deadline) {
-      if (Test-Path $regionDir) {
-        $mcas = Get-ChildItem $regionDir -Filter "*.mca" -ErrorAction SilentlyContinue
-        if ($mcas -and ($mcas | Measure-Object -Property Length -Sum).Sum -gt 50000) {
-          Start-Sleep -Seconds 5
-          break
-        }
+  $ready = $false
+  $deadline = (Get-Date).AddMinutes(12)
+  while ((Get-Date) -lt $deadline) {
+    if ($p.HasExited) { break }
+    if (Test-Path $console) {
+      $text = Get-Content $console -Raw -ErrorAction SilentlyContinue
+      if ($text -and ($text -match 'Done \(' -or $text -match 'For help, type')) {
+        $ready = $true
+        break
       }
-      Start-Sleep -Seconds 2
     }
-
-    Invoke-RconLocal -Port $RPort -Command "save-all flush" | Out-Null
-    Start-Sleep -Seconds 3
-    Invoke-RconLocal -Port $RPort -Command "stop" | Out-Null
-    $proc.WaitForExit(120000) | Out-Null
-  } finally {
-    if (-not $proc.HasExited) {
-      try { $proc.Kill() } catch {}
-    }
-    Get-Job | Where-Object { $_.Id -eq $outJob.Id } | Remove-Job -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 400
   }
+  if (-not $ready) {
+    Stop-ParityProcess $p
+    throw "$Label never became ready. See $console"
+  }
+  Write-Host "$Label READY" -ForegroundColor Green
+  Start-Sleep -Seconds 2
+
+  $rconOk = $false
+  for ($i = 0; $i -lt 40; $i++) {
+    try {
+      $null = Invoke-RconLocal -Port $RPort -Command "list"
+      $rconOk = $true
+      break
+    } catch {
+      Start-Sleep -Seconds 1
+    }
+  }
+  if (-not $rconOk) {
+    Stop-ParityProcess $p
+    throw "$Label RCON not available"
+  }
+
+  # forceload block box covering [-R..R] chunks around origin
+  $b0 = -16 * $RadiusChunks
+  $b1 = 16 * $RadiusChunks + 15
+  $cmd = "forceload add $b0 $b0 $b1 $b1"
+  Write-Host ">> $cmd"
+  try { Invoke-RconLocal -Port $RPort -Command $cmd | Write-Host } catch { Write-Host $_ }
+
+  # wait for region files to materialize
+  $regionDir = Join-Path $dir "world\region"
+  $deadline = (Get-Date).AddSeconds(240)
+  while ((Get-Date) -lt $deadline) {
+    if (Test-Path $regionDir) {
+      $sum = (Get-ChildItem $regionDir -Filter "*.mca" -EA SilentlyContinue | Measure-Object Length -Sum).Sum
+      if ($sum -gt 80000) {
+        Start-Sleep -Seconds 8
+        break
+      }
+    }
+    Start-Sleep -Seconds 2
+  }
+
+  try { Invoke-RconLocal -Port $RPort -Command "save-all flush" | Out-Null } catch {}
+  Start-Sleep -Seconds 4
+  try { Invoke-RconLocal -Port $RPort -Command "stop" | Out-Null } catch {}
+  $waited = 0
+  while (-not $p.HasExited -and $waited -lt 90) {
+    Start-Sleep -Seconds 1
+    $waited++
+  }
+  Stop-ParityProcess $p
 
   $world = Join-Path $dir "world"
   $outJson = Join-Path $results "parity-$Label-hash.json"
   & python $hashPy $world --radius $RadiusChunks --seed $Seed --out $outJson
-  if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3) {
-    Write-Host "hash failed exit=$LASTEXITCODE" -ForegroundColor Red
+  $code = $LASTEXITCODE
+  if ($code -ne 0 -and $code -ne 3) {
+    Write-Host "hash exit=$code (3=missing chunks ok-ish)" -ForegroundColor Yellow
   }
   return $outJson
 }
 
-# Baseline: spark only (vanilla noise path)
+# kill leftover parity java
+Get-CimInstance Win32_Process -Filter "Name='java.exe'" -EA SilentlyContinue |
+  Where-Object { $_.CommandLine -match 'run-parity-' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue }
+
 $baseJson = Run-ParityGen -Label "baseline" -ModJars @($sparkJar) -Port $ServerPort -RPort $RconPort
-# Candidate: noisiumed + spark
 $nJson = Run-ParityGen -Label "noisiumed" -ModJars @($sparkJar, $noisiumedJar) -Port ($ServerPort + 1) -RPort ($RconPort + 1)
 
 Write-Host "==== COMPARE ====" -ForegroundColor Magenta
 $cmpOut = Join-Path $results "PARITY_COMPARE.json"
-& python $hashPy --compare $baseJson $nJson | Tee-Object -FilePath $cmpOut
+& python $hashPy --compare-a $baseJson --compare-b $nJson | Tee-Object -FilePath $cmpOut
 $cmp = Get-Content $cmpOut -Raw | ConvertFrom-Json
 
 $md = Join-Path $results "PARITY_REPORT.md"
@@ -194,17 +213,17 @@ $md = Join-Path $results "PARITY_REPORT.md"
 Date: $(Get-Date -Format o)
 Seed=$Seed radiusChunks=$RadiusChunks
 Baseline: spark only (vanilla NoiseChunk)
-Candidate: $($noisiumedJar | Split-Path -Leaf)
+Candidate: $(Split-Path $noisiumedJar -Leaf)
 
-| | Hash |
-|--|------|
+| | |
+|--|--|
 | baseline overall | $($cmp.overall_a) |
 | noisiumed overall | $($cmp.overall_b) |
 | chunk matches | $($cmp.matches) |
 | mismatches | $($cmp.mismatches) |
 | **PASS** | **$($cmp.match)** |
 
-Full: ``bench/results/PARITY_COMPARE.json``
+Details: ``bench/results/PARITY_COMPARE.json``
 "@ | Set-Content $md -Encoding UTF8
 
 Write-Host "Report: $md" -ForegroundColor Green

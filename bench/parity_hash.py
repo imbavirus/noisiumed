@@ -230,20 +230,23 @@ def main() -> int:
     ap.add_argument("--radius", type=int, default=2, help="Chunk radius around 0,0 (default 2)")
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--out", type=str, default=None)
-    ap.add_argument("--compare", nargs=2, metavar=("A.json", "B.json"))
+    ap.add_argument("--compare-a", type=str, default=None, help="Hash JSON A (with --compare-b)")
+    ap.add_argument("--compare-b", type=str, default=None, help="Hash JSON B (with --compare-a)")
     args = ap.parse_args()
 
-    if args.compare:
-        with open(args.compare[0], encoding="utf-8") as f:
+    if args.compare_a or args.compare_b:
+        if not args.compare_a or not args.compare_b:
+            ap.error("both --compare-a and --compare-b required")
+        with open(args.compare_a, encoding="utf-8") as f:
             a = json.load(f)
-        with open(args.compare[1], encoding="utf-8") as f:
+        with open(args.compare_b, encoding="utf-8") as f:
             b = json.load(f)
         rep = compare(a, b)
         print(json.dumps(rep, indent=2))
         return 0 if rep["match"] else 2
 
     if not args.world:
-        ap.error("world path required (or --compare)")
+        ap.error("world path required (or --compare-a/--compare-b)")
     world = Path(args.world)
     if not world.is_dir():
         print(f"not a directory: {world}", file=sys.stderr)
