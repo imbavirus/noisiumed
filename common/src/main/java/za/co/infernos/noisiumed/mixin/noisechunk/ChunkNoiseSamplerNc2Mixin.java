@@ -39,6 +39,8 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 	@Shadow
 	private int index;
 	@Shadow
+	private int startBlockX;
+	@Shadow
 	private int startBlockY;
 	@Shadow
 	private int startBlockZ;
@@ -53,9 +55,15 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 	@Final
 	private int verticalCellBlockCount;
 	@Shadow
+	@Final
+	private int horizontalCellCount;
+	@Shadow
 	private boolean isSamplingForCaches;
 	@Shadow
 	private long cacheOnceUniqueIndex;
+	@Shadow
+	@Final
+	private DensityFunction.EachApplier interpolationEachApplier;
 
 	/** Shared with NC-1 when present; may be null if NC-1 not applied first. */
 	@Unique
@@ -123,24 +131,23 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 	 */
 	@Overwrite
 	public void sampleDensity(boolean startColumn, int cellX) {
-		final ChunkNoiseSamplerFlagsAccess flags = (ChunkNoiseSamplerFlagsAccess) (Object) this;
-		final int cellBlock = flags.noisiumed$getHorizontalCellBlockCount();
-		flags.noisiumed$setStartBlockX(cellX * cellBlock);
-		flags.noisiumed$setCellBlockX(0);
+		final int cellBlock = this.horizontalCellBlockCount;
+		this.startBlockX = cellX * cellBlock;
+		this.cellBlockX = 0;
 
 		Object[] interps = this.noisiumed$interpolatorArrayNc2;
 		if (interps == null) {
 			interps = this.interpolators.toArray();
 			this.noisiumed$interpolatorArrayNc2 = interps;
 		}
-		final DensityFunction.EachApplier applier = flags.noisiumed$getInterpolationEachApplier();
-		final int zCells = flags.noisiumed$getHorizontalCellCount() + 1;
-		final int startZ = flags.noisiumed$getStartCellZ();
+		final DensityFunction.EachApplier applier = this.interpolationEachApplier;
+		final int zCells = this.horizontalCellCount + 1;
+		final int startZ = this.startCellZ;
 
 		for (int z = 0; z < zCells; z++) {
-			flags.noisiumed$setStartBlockZ((startZ + z) * cellBlock);
-			flags.noisiumed$setCellBlockZ(0);
-			flags.noisiumed$setCacheOnceUniqueIndex(flags.noisiumed$getCacheOnceUniqueIndex() + 1L);
+			this.startBlockZ = (startZ + z) * cellBlock;
+			this.cellBlockZ = 0;
+			this.cacheOnceUniqueIndex++;
 
 			//noinspection ForLoopReplaceableByForEach
 			for (int i = 0, n = interps.length; i < n; i++) {
@@ -151,7 +158,7 @@ public abstract class ChunkNoiseSamplerNc2Mixin {
 				di.noisiumed$fill(col, applier);
 			}
 		}
-		flags.noisiumed$setCacheOnceUniqueIndex(flags.noisiumed$getCacheOnceUniqueIndex() + 1L);
+		this.cacheOnceUniqueIndex++;
 	}
 
 	/**
