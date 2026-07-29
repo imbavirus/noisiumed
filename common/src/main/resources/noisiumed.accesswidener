@@ -12,6 +12,10 @@ accessible class net/minecraft/world/chunk/PalettedContainer$Data
 accessible field net/minecraft/world/chunk/PalettedContainer$Data palette Lnet/minecraft/world/chunk/Palette;
 accessible method net/minecraft/world/chunk/PalettedContainer$Data storage ()Lnet/minecraft/util/collection/PaletteStorage;
 
+# Wrapping marker for NC-3 CACHE_ALL_IN_CELL capture
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$Wrapping
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$Wrapping$Type
+
 # DensityInterpolator corner fields (inline lerp overwrite)
 accessible class net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator
 accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator x0y0z0 D

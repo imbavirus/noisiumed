@@ -185,13 +185,14 @@ Without N6c, N1d/N5 are too dangerous.
 
 **Exit:** boots clean; `nc1_s2` + NC-2 mixins active; sample still ~70% of L1 (NC-3 next for real sample drop).
 
-### Milestone NC-3 — “Cell density grid” spike (1 week spike + re-estimate)
+### Milestone NC-3 — “Cell density grid” — **shipped beta.9**
 
-1. N1d or N5 prototype behind flag `noisiumed.experimental.cell_density_grid`  
-2. Golden parity on 3 seeds × aquifers on/off  
-3. Kill or productize  
+1. Capture last `CACHE_ALL_IN_CELL` wrap → `CellCache` double[]  
+2. `sampleBlockState` = index cache + `AquiferSampler.apply` + optional ore secondary  
+3. Flag: `-Dnoisiumed.cell.density.grid=false` to disable  
+4. Result: **sample_pct ~62–63%** (was ~70–77%); wall still FN-competitive  
 
-**Exit:** go/no-go for multi-week aquifer-coupled batching.
+**Next pressure:** aquifer internals / ore-vein density / remaining fillArray (NC-4).
 
 ### Milestone NC-4 — Aquifer polish (only if needed)
 

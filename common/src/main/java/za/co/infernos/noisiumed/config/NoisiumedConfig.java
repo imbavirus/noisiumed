@@ -23,10 +23,21 @@ public final class NoisiumedConfig {
 
 	private static final Set<String> L1_GENERATOR_ALLOWLIST = parseAllowlist();
 
+	/**
+	 * NC-3: sampleBlockState reads primary density from CellCache array (same as vanilla
+	 * CacheAllInCell) instead of re-entering density.sample. Disable with
+	 * {@code -Dnoisiumed.cell.density.grid=false}.
+	 */
+	private static final boolean CELL_DENSITY_GRID = parseBool("noisiumed.cell.density.grid", "NOISIUMED_CELL_DENSITY_GRID", true);
+
 	private NoisiumedConfig() {}
 
 	public static @NotNull Set<String> l1GeneratorAllowlist() {
 		return L1_GENERATOR_ALLOWLIST;
+	}
+
+	public static boolean cellDensityGrid() {
+		return CELL_DENSITY_GRID;
 	}
 
 	public static boolean isL1GeneratorAllowed(@NotNull Class<?> generatorRuntimeClass) {
@@ -34,6 +45,17 @@ public final class NoisiumedConfig {
 			return false;
 		}
 		return L1_GENERATOR_ALLOWLIST.contains(generatorRuntimeClass.getName());
+	}
+
+	private static boolean parseBool(String prop, String env, boolean defaultValue) {
+		String raw = System.getProperty(prop);
+		if (raw == null || raw.isBlank()) {
+			raw = System.getenv(env);
+		}
+		if (raw == null || raw.isBlank()) {
+			return defaultValue;
+		}
+		return !raw.equalsIgnoreCase("false") && !raw.equals("0") && !raw.equalsIgnoreCase("off");
 	}
 
 	private static Set<String> parseAllowlist() {

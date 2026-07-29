@@ -21,6 +21,14 @@ public final class FastDualBlockSampler implements ChunkNoiseSampler.BlockStateS
 		this.second = second;
 	}
 
+	public @NotNull ChunkNoiseSampler.BlockStateSampler first() {
+		return this.first;
+	}
+
+	public @NotNull ChunkNoiseSampler.BlockStateSampler second() {
+		return this.second;
+	}
+
 	@Override
 	@Nullable
 	public BlockState sample(DensityFunction.NoisePos pos) {

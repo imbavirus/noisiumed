@@ -25,6 +25,7 @@
     "noisechunk.ChunkNoiseSamplerSpecializeMixin",
     "noisechunk.ChunkNoiseSamplerNc1Mixin",
     "noisechunk.ChunkNoiseSamplerNc2Mixin",
+    "noisechunk.ChunkNoiseSamplerNc3Mixin",
     "noisechunk.CellCacheAccess"
   ],
   "client": [],
