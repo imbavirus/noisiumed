@@ -25,6 +25,7 @@ public final class PathMetrics {
 	private static final LongAdder SECTIONS_TOUCHED = new LongAdder();
 	private static final LongAdder SAMPLE_NS = new LongAdder();
 	private static final LongAdder WRITE_NS = new LongAdder();
+	private static final LongAdder SPECIALIZE = new LongAdder();
 
 	private static final LongAdder[] L0_REASONS = new LongAdder[L0Reason.values().length];
 
@@ -103,6 +104,14 @@ public final class PathMetrics {
 		return WRITE_NS.sum();
 	}
 
+	public static void recordSpecialize() {
+		SPECIALIZE.increment();
+	}
+
+	public static long specializeCount() {
+		return SPECIALIZE.sum();
+	}
+
 	public static long l0() {
 		return L0.sum();
 	}
@@ -172,6 +181,7 @@ public final class PathMetrics {
 			sb.append(" sample_pct=").append((sn * 100L) / totalSw)
 					.append(" write_pct=").append((wn * 100L) / totalSw);
 		}
+		sb.append(" specialize=").append(specializeCount());
 		sb.append(" l0_reasons{");
 		boolean first = true;
 		for (L0Reason r : L0Reason.values()) {
@@ -202,6 +212,7 @@ public final class PathMetrics {
 		SECTIONS_TOUCHED.reset();
 		SAMPLE_NS.reset();
 		WRITE_NS.reset();
+		SPECIALIZE.reset();
 		for (LongAdder a : L0_REASONS) {
 			a.reset();
 		}

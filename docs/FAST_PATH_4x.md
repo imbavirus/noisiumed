@@ -50,12 +50,13 @@ Harness: `bench/Run-WorldgenSparkCompare.ps1` records boot/forceload/profile wal
 
 On bare overworld L1, sampled timing shows roughly **~70% sampleBlockState vs ~30% direct writes**. Further huge wins must attack density/NoiseChunk sampling (specializer / cell path), not section packing.
 
-## Density (beta.2)
+## Density
 
-Parity-preserving micro-opts on hot DF nodes (holder cache, binary/unary/linear/range). **Not** a density graph specializer (Phase 3 plan).
+- **beta.2** — leaf mixins (holder cache, binary/unary/linear/range)
+- **beta.5** — **specializer**: after `getActualDensityFunctionImpl`, rewrite Unary/Linear/Binary to monomorphic `SpecDensity` types (Abs, MulConst, Add, …)
 
 ## Out of scope (still)
 
-- Full density-function evaluation rewrite / specializer  
+- Noise sampler / Perlin rewrite  
 - Full material-rule surface compiler  
-- NoiseChunk interpolator rewrite (Phase 2 plan)
+- Aquifer BlockStateFiller replacement

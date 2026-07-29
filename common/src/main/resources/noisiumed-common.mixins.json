@@ -19,7 +19,8 @@
     "density.RangeChoiceMixin",
     "density.RegistryEntryHolderMixin",
     "density.UnaryOperationMixin",
-    "noisechunk.DensityInterpolatorMixin"
+    "noisechunk.DensityInterpolatorMixin",
+    "noisechunk.ChunkNoiseSamplerSpecializeMixin"
   ],
   "client": [],
   "injectors": {
