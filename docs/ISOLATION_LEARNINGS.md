@@ -80,7 +80,26 @@ Date: 2026-07-30. Champion: `champion-16.5` / `4.0.0-beta.16.5`.
 
 ---
 
-## Continue plan (W5–W9)
+## Continue plan (W5–W9) — status after continuation
 
-Order: W5 → W6 → W8 → W7 (careful) → W9.  
-Multi ×3 triage each; record on scoreboard; push branches.
+| Exp | Done |
+|-----|------|
+| W5 arena | Implemented + multi → **REJECT** vs cold control (hot session) |
+| W6 secondary | Implemented + multi → micro; **re-bench cold** (parity-safe gap skip) |
+| W8 heightmap | Implemented + multi → **REJECT** on thrash (no empty chunks) |
+| W7 aquifer | Design branch only |
+| W9 turbo | Design branch only |
+
+### Additional learnings from continuation
+
+1. **Hot machine + FN spikes** (e.g. 117s FN, 94s N) make isolation tables noisy; document session quality.  
+2. **File locks** on `console.log` / `debug.log` from leftover `cmd` redirects — fixed with **unique console log names** + port-based stop.  
+3. **W8 empty heightmap skip** is theoretically free but **never fires** when `surface_skip=0` / all chunks have solids.  
+4. **W6 gap short-circuit** is the right class of secondary quant analogue: **same RNG order, less DF work**.  
+5. Do **not** kill bare `user_jvm_args` java processes without port match — those can be other MC servers.
+
+### Immediate next (cold machine)
+
+1. Multi ×5 `champion-16.5` → CONTROL v2.  
+2. Multi ×5 W4, W1, W6 on same machine.  
+3. If W1 FLAG/ADOPT → implement W9 turbo stacking W4+W1+W6.
