@@ -127,7 +127,7 @@ $fSparks = New-Object System.Collections.Generic.List[string]
 $runRows = New-Object System.Collections.Generic.List[string]
 
 function Stop-BenchJavaOnly {
-  # Never kill unrelated Minecraft/Java servers ÔÇö only this harness (paths, labels, or bench ports).
+  # Never kill unrelated Minecraft/Java servers — only this harness (paths, labels, or bench ports).
   $root = [regex]::Escape($BenchRoot)
   Get-CimInstance Win32_Process -Filter "Name='java.exe'" -EA SilentlyContinue |
     Where-Object {
@@ -285,8 +285,8 @@ $gate = $false
 if ($null -ne $pctQuietMed -and $pctQuietMed -ge 10.0 -and $null -ne $pctMean -and $pctMean -ge 5.0) {
   $gate = $true
 }
-$report += ("- Quiet median ÔëÑ10% faster: **{0}** ({1})" -f $(if ($null -ne $pctQuietMed -and $pctQuietMed -ge 10) { "PASS" } else { "FAIL" }), $(if ($null -ne $pctQuietMed) { "{0:F1}%" -f $pctQuietMed } else { "n/a" }))
-$report += ("- Multi mean ÔëÑ5% faster: **{0}** ({1})" -f $(if ($null -ne $pctMean -and $pctMean -ge 5) { "PASS" } else { "FAIL" }), $(if ($null -ne $pctMean) { "{0:F1}%" -f $pctMean } else { "n/a" }))
+$report += ("- Quiet median ≥10% faster: **{0}** ({1})" -f $(if ($null -ne $pctQuietMed -and $pctQuietMed -ge 10) { "PASS" } else { "FAIL" }), $(if ($null -ne $pctQuietMed) { "{0:F1}%" -f $pctQuietMed } else { "n/a" }))
+$report += ("- Multi mean ≥5% faster: **{0}** ({1})" -f $(if ($null -ne $pctMean -and $pctMean -ge 5) { "PASS" } else { "FAIL" }), $(if ($null -ne $pctMean) { "{0:F1}%" -f $pctMean } else { "n/a" }))
 $report += ("- Combined dominance gate: **{0}**" -f $(if ($gate) { "PASS" } else { "FAIL" }))
 $report += ""
 

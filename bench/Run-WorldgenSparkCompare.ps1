@@ -242,7 +242,7 @@ function Run-SparkWorldgen {
   while (-not $p.HasExited -and (Get-Date) -lt $stopDl) { Start-Sleep -Milliseconds 400 }
   if (-not $p.HasExited) {
     Stop-Process -Id $p.Id -Force -EA SilentlyContinue
-    # Only children/siblings under this label's server dir ÔÇö never other MC servers.
+    # Only children/siblings under this label's server dir — never other MC servers.
     $dirEsc = [regex]::Escape($ServerDir)
     Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" -EA SilentlyContinue |
       Where-Object { $_.CommandLine -and $_.CommandLine -match $dirEsc } |
