@@ -15,7 +15,10 @@ param(
   [int]$Seed = 12345,
   [int]$ServerPort = 25580,
   [int]$RconPort = 25585,
-  [string]$RconPassword = "benchparity"
+  [string]$RconPassword = "benchparity",
+  # noisiumed | fastnoise — who we compare against spark-only baseline
+  [ValidateSet("noisiumed", "fastnoise")]
+  [string]$Candidate = "noisiumed"
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,8 +42,10 @@ $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.12-neoforge-1.21.1.jar"
 if (-not (Test-Path $noisiumedJar)) {
   $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.11-neoforge-1.21.1.jar"
 }
+$fnJar = Join-Path $jars "zfastnoise-1.0.13+1.21.1+neoforge.jar"
 if (-not (Test-Path $sparkJar)) { throw "Missing spark jar" }
-if (-not (Test-Path $noisiumedJar)) { throw "Missing noisiumed jar" }
+if ($Candidate -eq "noisiumed" -and -not (Test-Path $noisiumedJar)) { throw "Missing noisiumed jar" }
+if ($Candidate -eq "fastnoise" -and -not (Test-Path $fnJar)) { throw "Missing Fast Noise jar: $fnJar" }
 
 function Invoke-RconLocal([int]$Port, [string]$Command) {
   & python $rconPy 127.0.0.1 $Port $RconPassword $Command
@@ -209,37 +214,47 @@ Get-CimInstance Win32_Process -Filter "Name='java.exe'" -EA SilentlyContinue |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue }
 
 $baseJson = Run-ParityGen -Label "baseline" -ModJars @($sparkJar) -Port $ServerPort -RPort $RconPort
-$nJson = Run-ParityGen -Label "noisiumed" -ModJars @($sparkJar, $noisiumedJar) -Port ($ServerPort + 1) -RPort ($RconPort + 1)
 
-Write-Host "==== COMPARE ====" -ForegroundColor Magenta
-$cmpOut = Join-Path $results "PARITY_COMPARE.json"
+if ($Candidate -eq "fastnoise") {
+  $candLabel = "fastnoise"
+  $candMods = @($sparkJar, $fnJar)
+  $candJarName = Split-Path $fnJar -Leaf
+} else {
+  $candLabel = "noisiumed"
+  $candMods = @($sparkJar, $noisiumedJar)
+  $candJarName = Split-Path $noisiumedJar -Leaf
+}
+$nJson = Run-ParityGen -Label $candLabel -ModJars $candMods -Port ($ServerPort + 1) -RPort ($RconPort + 1)
+
+Write-Host "==== COMPARE (baseline vs $candLabel) ====" -ForegroundColor Magenta
+$cmpOut = Join-Path $results "PARITY_COMPARE_$candLabel.json"
 & python $hashPy --compare-a $baseJson --compare-b $nJson | Tee-Object -FilePath $cmpOut
 $cmp = Get-Content $cmpOut -Raw | ConvertFrom-Json
 
-$md = Join-Path $results "PARITY_REPORT.md"
+$md = Join-Path $results "PARITY_REPORT_$candLabel.md"
 @"
-# Golden section hash parity
+# Golden section hash parity — baseline vs $candLabel
 
 Date: $(Get-Date -Format o)
 Seed=$Seed radiusChunks=$RadiusChunks
 Baseline: spark only (vanilla NoiseChunk)
-Candidate: $(Split-Path $noisiumedJar -Leaf)
+Candidate: $candJarName
 
 | | |
 |--|--|
 | baseline overall | $($cmp.overall_a) |
-| noisiumed overall | $($cmp.overall_b) |
+| $candLabel overall | $($cmp.overall_b) |
 | chunk matches | $($cmp.matches) |
 | mismatches | $($cmp.mismatches) |
 | **PASS** | **$($cmp.match)** |
 
-Details: ``bench/results/PARITY_COMPARE.json``
+Details: ``bench/results/PARITY_COMPARE_$candLabel.json``
 "@ | Set-Content $md -Encoding UTF8
 
 Write-Host "Report: $md" -ForegroundColor Green
 if (-not $cmp.match) {
-  Write-Host "PARITY FAIL ($($cmp.mismatches) chunks differ)" -ForegroundColor Red
+  Write-Host "PARITY FAIL vs $candLabel ($($cmp.mismatches) chunks differ)" -ForegroundColor Red
   exit 2
 }
-Write-Host "PARITY PASS" -ForegroundColor Green
+Write-Host "PARITY PASS vs $candLabel" -ForegroundColor Green
 exit 0
