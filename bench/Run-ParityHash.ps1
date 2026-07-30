@@ -159,22 +159,32 @@ function Run-ParityGen {
   Write-Host ">> $cmd"
   try { Invoke-RconLocal -Port $RPort -Command $cmd | Write-Host } catch { Write-Host $_ }
 
-  # wait for region files to materialize
-  $regionDir = Join-Path $dir "world\region"
-  $deadline = (Get-Date).AddSeconds(240)
+  # Wait until all radius chunks report Status full.
+  $deadline = (Get-Date).AddSeconds(300)
+  $tmpHash = Join-Path $results "parity-$Label-wait.json"
+  $fullOk = $false
   while ((Get-Date) -lt $deadline) {
-    if (Test-Path $regionDir) {
-      $sum = (Get-ChildItem $regionDir -Filter "*.mca" -EA SilentlyContinue | Measure-Object Length -Sum).Sum
-      if ($sum -gt 80000) {
-        Start-Sleep -Seconds 8
-        break
+    try { Invoke-RconLocal -Port $RPort -Command "save-all flush" | Out-Null } catch {}
+    Start-Sleep -Seconds 4
+    $worldProbe = Join-Path $dir "world"
+    if (Test-Path (Join-Path $worldProbe "region")) {
+      & python $hashPy $worldProbe --radius $RadiusChunks --out $tmpHash 2>$null | Out-Null
+      if (Test-Path $tmpHash) {
+        $probe = Get-Content $tmpHash -Raw | ConvertFrom-Json
+        if ([int]$probe.missing -eq 0 -and [int]$probe.not_full -eq 0 -and [int]$probe.errors -eq 0) {
+          $fullOk = $true
+          Write-Host "$Label chunks FULL" -ForegroundColor Green
+          break
+        }
+        Write-Host ("  wait full: missing={0} not_full={1}" -f $probe.missing, $probe.not_full) -ForegroundColor DarkGray
       }
     }
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
   }
+  if (-not $fullOk) { Write-Host "$Label WARNING: FULL wait timeout" -ForegroundColor Yellow }
 
   try { Invoke-RconLocal -Port $RPort -Command "save-all flush" | Out-Null } catch {}
-  Start-Sleep -Seconds 4
+  Start-Sleep -Seconds 3
   try { Invoke-RconLocal -Port $RPort -Command "stop" | Out-Null } catch {}
   $waited = 0
   while (-not $p.HasExited -and $waited -lt 90) {

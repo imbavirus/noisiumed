@@ -1,35 +1,58 @@
 # Golden hash parity bisect
 
-Date: 2026-07-30  
-Seed=12345 radiusChunks=2 (25 chunks)  
-Jar: `noisiumed-4.0.0-beta.12-neoforge-1.21.1.jar`  
-Baseline: spark-only (vanilla NoiseChunk)
+Seed=12345 · radiusChunks=2 (25 chunks) · jar beta.12  
+Baseline = spark-only vanilla NoiseChunk · both sides polled to **Status=minecraft:full**
 
-| Config | Match | Matches | Mismatches | Notes |
-|--------|-------|---------|------------|--------|
-| `full` | false | 4 | 21 | all optims on |
-| `ore_off` | false | **16** | **9** | `-Dnoisiumed.fast.ore=false` |
-| `aq_off` | false | **18** | **7** | + aquifer specialize off |
-| `grid_off` | false | 13 | 12 | + cell density grid off |
-| `spec_off` | false | 10 | 15 | + density specializer off |
-| `l1_off` | false | 9 | 16 | + L1 bulk path off |
+## Round 1 (progressive disable; older wait — treat as directional)
 
-## Interpretation
+| Config | Matches | Mismatches |
+|--------|---------|------------|
+| full (all on) | 4 | 21 |
+| ore_off | **16** | **9** |
+| aq_off (+ore) | **18** | **7** |
+| +grid_off | 13 | 12 |
+| +spec_off | 10 | 15 |
+| +l1_off | 9 | 16 |
 
-1. **FastOreVeinSampler is the dominant parity bug**  
-   Turning it off recovers **12** chunks (21 miss → 9). Extra `DensitySpecializer.specialize` on ore inputs was a likely cause (removed in follow-up); default is now **off**.
+**Signal:** FastOre is the largest single hit; aquifer specialize smaller.
 
-2. **Aquifer density specialize is a smaller hit**  
-   Off recovers ~2 more chunks vs ore_off alone (9 → 7). Default now **off**.
+## Round 2 (FULL wait; defaults ore/aq **off**)
 
-3. **Non-monotonic later steps** (grid/spec/l1 off *worse*)  
-   Mismatch sets are **not nested** across configs → harness was saving some non-FULL / racing gen. Follow-up: wait until all chunks report `Status=full` before hashing.
+| Config | Matches | Mismatches | Extra JVM |
+|--------|---------|------------|-----------|
+| default (L1+spec+grid on) | 10 | 15 | (none) |
+| **l1_off** | **19** | **6** | `-Dnoisiumed.l1=false` |
+| grid_off | 18 | 7 | `-Dnoisiumed.cell.density.grid=false` |
+| spec_off | 3 | 22 | `-Dnoisiumed.density.specialize=false` |
+| l1+spec+grid off | 2 | 23 | all three off |
 
-4. **Residual ~7 chunks** even with ore+aq off  
-   Still open: NC-3 grid, L1 write path, L0 palette redirect, surface, interpolator mixins — re-bisect after FULL-status gate.
+## Culprits (ordered)
 
-## Follow-ups shipped
+1. **FastOreVeinSampler** (re-specialize of ore densities) — default **OFF**  
+2. **Aquifer density specialize** — default **OFF**  
+3. **L1 bulk path** (`BulkNoiseFiller` / direct write) — largest residual after 1–2 (~9 chunks)  
+4. **NC-3 cell density grid** — almost as large as L1 when L1 is on (~8 chunks vs default)  
+5. Residual ~6 chunks with L1 off → L0 palette redirect, density *mixins* (not specializer), interpolator, surface  
 
-- Kill switches: `noisiumed.l1`, `noisiumed.density.specialize`, ore/aq defaults off  
-- `Run-ParityBisect.ps1` + FULL status wait  
-- Ore sampler no longer re-specializes wrapped densities  
+## Actions taken
+
+| Change | Status |
+|--------|--------|
+| `-Dnoisiumed.fast.ore` default **false** | shipped |
+| `-Dnoisiumed.aquifer.specialize` default **false** | shipped |
+| Ore no longer re-specializes wrapped DFs | shipped |
+| Kill switches `noisiumed.l1`, `noisiumed.density.specialize` | shipped |
+| FULL-status wait in parity harness | shipped |
+| `Run-ParityBisect.ps1` | shipped |
+
+## Next code targets (parity, not wall)
+
+1. Diff L1 vs L0 on a single mismatched chunk (section Y palette names)  
+2. Fix NC-3 grid index / sample order if grid_off recovers most of L1 gap  
+3. Audit L0 `setBlockState` redirect + deferred heightmaps vs vanilla post-process  
+
+```powershell
+cd bench
+.\Run-ParityBisect.ps1 -RadiusChunks 2 -Seed 12345
+.\Run-ParityHash.ps1 -RadiusChunks 2 -Seed 12345
+```
