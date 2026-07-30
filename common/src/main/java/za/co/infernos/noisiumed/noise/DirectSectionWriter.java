@@ -17,9 +17,20 @@ import org.jetbrains.annotations.Nullable;
  * (empty start). Falls back to {@code storage.set} when bits ≠ 4 or after palette resize.
  * <p>
  * Identity last-state cache avoids repeated palette scans on solid runs.
+ * <p>
+ * W4: optional pre-grow to 4-bit on bind (force singular→array before the hot loop).
  */
 public final class DirectSectionWriter {
 	public static final BlockState AIR = Blocks.AIR.getDefaultState();
+	/** Non-air dummy used only to force singular→array palette growth; storage stays all zeros. */
+	private static final BlockState PREGROW_MARKER = Blocks.STONE.getDefaultState();
+
+	/**
+	 * W4 isolation: pre-grow 4-bit array palette on bind. Default on for this experiment branch.
+	 * Disable: {@code -Dnoisiumed.exp.w4.pregrow=false}
+	 */
+	public static final boolean PREGROW_4BIT = !"false".equalsIgnoreCase(
+			System.getProperty("noisiumed.exp.w4.pregrow", "true"));
 
 	private @Nullable ChunkSection section;
 	private boolean dirty;
@@ -58,6 +69,33 @@ public final class DirectSectionWriter {
 		this.raw4 = null;
 		this.fast4 = false;
 		columnBits[0] = columnBits[1] = columnBits[2] = columnBits[3] = 0L;
+		if (PREGROW_4BIT) {
+			pregrow4Bit();
+		}
+	}
+
+	/**
+	 * Force empty singular section onto 4-bit array storage so the first solid write uses OR packing
+	 * without paying palette resize mid-loop. Storage remains zeros (air). Marker state sits in the
+	 * palette only (same as first real stone index later).
+	 */
+	private void pregrow4Bit() {
+		//noinspection DataFlowIssue
+		PalettedContainer<BlockState> container = section.blockStateContainer;
+		PaletteStorage storage = container.data.storage();
+		if (storage.getElementBits() == 4) {
+			captureFast4(container);
+			return;
+		}
+		// Register non-air so SingularPalette grows → ArrayPalette + 4-bit PackedIntegerArray.
+		container.data.palette.index(PREGROW_MARKER);
+		// Re-read after possible resize inside index().
+		captureFast4(container);
+		if (raw4 != null) {
+			for (int i = 0; i < 256; i++) {
+				raw4[i] = 0L;
+			}
+		}
 	}
 
 	public void reset() {
