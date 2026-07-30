@@ -39,6 +39,71 @@ public final class DensitySpecializer {
 		return function;
 	}
 
+	/**
+	 * Specialize only if the entire tree is pure arithmetic (no noise / wrap / beard).
+	 * Safe for aquifer barrier graphs that are math-only.
+	 */
+	public static @NotNull DensityFunction specializePure(@NotNull DensityFunction function) {
+		if (!NoisiumedConfig.densitySpecialize() || !isPureArithmeticTree(function)) {
+			return function;
+		}
+		return specialize(function);
+	}
+
+	/**
+	 * Vanilla installs primary density as {@code cacheAllInCell(add(finalDensity, beardifier))}.
+	 * True when {@code f} is that add (or specialized Add) containing a beard node.
+	 */
+	public static boolean isBeardifiedFinalDensity(@NotNull DensityFunction f) {
+		if (f instanceof DensityFunctionTypes.BinaryOperation bin
+				&& bin.type().ordinal() == 0 /* ADD */) {
+			return isBeard(bin.argument1()) || isBeard(bin.argument2());
+		}
+		if (f instanceof BinarySpecs.Add add) {
+			return isBeard(add.left()) || isBeard(add.right());
+		}
+		return false;
+	}
+
+	private static boolean isBeard(DensityFunction f) {
+		return f instanceof DensityFunctionTypes.Beardifier
+				|| f instanceof DensityFunctionTypes.Beardifying;
+	}
+
+	/**
+	 * Pure arithmetic trees only (unary/binary/linear/range/constant/spec). Anything with
+	 * noise, wrapping, or unknown nodes returns false.
+	 */
+	public static boolean isPureArithmeticTree(@NotNull DensityFunction f) {
+		if (f instanceof SpecDensity) {
+			// Spec trees are already monomorphic arithmetic (or pure children).
+			return true;
+		}
+		if (f instanceof DensityFunctionTypes.Constant) {
+			return true;
+		}
+		if (f instanceof DensityFunctionTypes.UnaryOperation unary) {
+			return isPureArithmeticTree(unary.input());
+		}
+		if (f instanceof DensityFunctionTypes.LinearOperation linear) {
+			return isPureArithmeticTree(linear.input());
+		}
+		if (functionBinary(f)) {
+			DensityFunctionTypes.BinaryOperation bin = (DensityFunctionTypes.BinaryOperation) f;
+			return isPureArithmeticTree(bin.argument1()) && isPureArithmeticTree(bin.argument2());
+		}
+		if (f instanceof DensityFunctionTypes.RangeChoice range) {
+			return isPureArithmeticTree(range.input())
+					&& isPureArithmeticTree(range.whenInRange())
+					&& isPureArithmeticTree(range.whenOutOfRange());
+		}
+		return false;
+	}
+
+	private static boolean functionBinary(DensityFunction f) {
+		return f instanceof DensityFunctionTypes.BinaryOperation;
+	}
+
 	private static DensityFunction specializeUnary(DensityFunctionTypes.UnaryOperation unary) {
 		DensityFunction input = specialize(unary.input());
 		double min = unary.minValue();

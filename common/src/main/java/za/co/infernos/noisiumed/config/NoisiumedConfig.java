@@ -24,27 +24,26 @@ public final class NoisiumedConfig {
 	private static final Set<String> L1_GENERATOR_ALLOWLIST = parseAllowlist();
 
 	/**
-	 * NC-3: sampleBlockState reads primary density from CellCache array when exactly one
-	 * CACHE_ALL_IN_CELL wrap exists for the NoiseChunk. Default <strong>off</strong> for
-	 * accuracy (final density is often Interpolated; reading the cell grid skips lerp).
-	 * Enable: {@code -Dnoisiumed.cell.density.grid=true}.
+	 * NC-3: read primary density from the CellCache that wraps
+	 * {@code add(finalDensity, beardifier)} (vanilla primary sampler density). Solid early-out
+	 * when density &gt; 0. Disable: {@code -Dnoisiumed.cell.density.grid=false}.
 	 */
 	private static final boolean CELL_DENSITY_GRID = parseBool(
-			"noisiumed.cell.density.grid", "NOISIUMED_CELL_DENSITY_GRID", false);
+			"noisiumed.cell.density.grid", "NOISIUMED_CELL_DENSITY_GRID", true);
 
 	/**
-	 * NC-5 monomorphic ore sampler (no re-specialize of wrapped vein DFs). Default on;
-	 * disable with {@code -Dnoisiumed.fast.ore=false}.
+	 * NC-5 monomorphic ore sampler (no re-specialize of vein DFs). Disable:
+	 * {@code -Dnoisiumed.fast.ore=false}.
 	 */
 	private static final boolean FAST_ORE = parseBool("noisiumed.fast.ore", "NOISIUMED_FAST_ORE", true);
 
 	/**
-	 * Specialize aquifer density nodes. Default <strong>off</strong> — those graphs are not
-	 * always pure arithmetic (can change open-fluid results). Enable:
-	 * {@code -Dnoisiumed.aquifer.specialize=true}.
+	 * Specialize aquifer density trees that are pure arithmetic only ({@code specializePure}).
+	 * Noise-bearing aquifer graphs are left alone. Disable:
+	 * {@code -Dnoisiumed.aquifer.specialize=false}.
 	 */
 	private static final boolean AQUIFER_SPECIALIZE = parseBool(
-			"noisiumed.aquifer.specialize", "NOISIUMED_AQUIFER_SPECIALIZE", false);
+			"noisiumed.aquifer.specialize", "NOISIUMED_AQUIFER_SPECIALIZE", true);
 
 	/**
 	 * L1 bulk noise fill. Disable with {@code -Dnoisiumed.l1=false} (force L0 vanilla loop).

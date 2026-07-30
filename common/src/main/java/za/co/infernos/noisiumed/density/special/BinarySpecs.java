@@ -21,6 +21,14 @@ public final class BinarySpecs {
 			this.b = b;
 		}
 
+		public DensityFunction left() {
+			return this.a;
+		}
+
+		public DensityFunction right() {
+			return this.b;
+		}
+
 		@Override
 		public double sample(NoisePos pos) {
 			return this.a.sample(pos) + this.b.sample(pos);

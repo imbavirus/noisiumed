@@ -54,12 +54,14 @@ public abstract class AquiferImplSpecializeMixin {
 		if (!NoisiumedConfig.aquiferSpecialize()) {
 			return;
 		}
-		this.barrierNoise = DensitySpecializer.specialize(this.barrierNoise);
-		this.fluidLevelFloodednessNoise = DensitySpecializer.specialize(this.fluidLevelFloodednessNoise);
-		this.fluidLevelSpreadNoise = DensitySpecializer.specialize(this.fluidLevelSpreadNoise);
-		this.fluidTypeNoise = DensitySpecializer.specialize(this.fluidTypeNoise);
-		this.erosionDensityFunction = DensitySpecializer.specialize(this.erosionDensityFunction);
-		this.depthDensityFunction = DensitySpecializer.specialize(this.depthDensityFunction);
+		// specializePure: only rewrites pure arithmetic trees (never noise/wrap) — keeps
+		// open-fluid math bit-identical while monomorphizing barrier math when safe.
+		this.barrierNoise = DensitySpecializer.specializePure(this.barrierNoise);
+		this.fluidLevelFloodednessNoise = DensitySpecializer.specializePure(this.fluidLevelFloodednessNoise);
+		this.fluidLevelSpreadNoise = DensitySpecializer.specializePure(this.fluidLevelSpreadNoise);
+		this.fluidTypeNoise = DensitySpecializer.specializePure(this.fluidTypeNoise);
+		this.erosionDensityFunction = DensitySpecializer.specializePure(this.erosionDensityFunction);
+		this.depthDensityFunction = DensitySpecializer.specializePure(this.depthDensityFunction);
 		PathMetrics.recordAquiferSpecialize();
 	}
 }

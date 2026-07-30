@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import za.co.infernos.noisiumed.config.NoisiumedConfig;
+import za.co.infernos.noisiumed.density.special.DensitySpecializer;
 import za.co.infernos.noisiumed.mixin.ChainedBlockSourceAccessor;
 import za.co.infernos.noisiumed.noise.sampler.FastDualBlockSampler;
 import za.co.infernos.noisiumed.noise.sampler.FastSingleBlockSampler;
@@ -26,10 +27,15 @@ import za.co.infernos.noisiumed.path.PathMetrics;
 import java.util.List;
 
 /**
- * NC-3: {@code sampleBlockState} reads primary density from the {@code CellCache}
- * produced by the last {@code CACHE_ALL_IN_CELL} wrap (finalDensity+beardifier),
- * then {@code AquiferSampler.apply}.
+ * NC-3/4: accurate fast path for primary block-state density.
  * <p>
+ * Vanilla installs {@code cacheAllInCell(add(finalDensity, beardifier))} as the density
+ * sampled by the aquifer lambda. We capture <strong>only that</strong> CellCache (not
+ * every CACHE_ALL_IN_CELL in the router), then:
+ * <ul>
+ *   <li>density &gt; 0 → solid early-out (skip full aquifer), optional ore secondary</li>
+ *   <li>else → {@code aquifer.apply(pos, density)} then ore</li>
+ * </ul>
  * Disable: {@code -Dnoisiumed.cell.density.grid=false}
  */
 @Mixin(value = ChunkNoiseSampler.class, priority = 1200)
@@ -57,13 +63,9 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 	@Shadow
 	private int cellBlockZ;
 
-	/** Last CACHE_ALL_IN_CELL wrap result (CellCache), if uniquely identified. */
+	/** CellCache for finalDensity+beard only. */
 	@Unique
-	private DensityFunction noisiumed$capturedCellDensity;
-
-	/** How many CACHE_ALL_IN_CELL wraps we saw; >1 means capture is ambiguous — refuse NC-3. */
-	@Unique
-	private int noisiumed$cellCacheWrapCount;
+	private DensityFunction noisiumed$primaryCellDensity;
 
 	@Unique
 	private double[] noisiumed$primaryDensityCache;
@@ -75,20 +77,24 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 	private boolean noisiumed$cellGridSample;
 
 	/**
-	 * Track CellCache instances as the router / finalDensity graph is wrapped.
-	 * Only safe when exactly one CACHE_ALL_IN_CELL exists for this NoiseChunk
-	 * (otherwise "last capture" can be the wrong density branch).
+	 * Capture CellCache for {@code cacheAllInCell(add(final, beard))} only — matches the
+	 * density vanilla binds into the primary block-state sampler.
 	 */
 	@Inject(method = "getActualDensityFunctionImpl", at = @At("RETURN"))
-	private void noisiumed$captureCellCache(
+	private void noisiumed$capturePrimaryCellCache(
 			DensityFunction function,
 			CallbackInfoReturnable<DensityFunction> cir
 	) {
-		if (function instanceof DensityFunctionTypes.Wrapping wrapping
-				&& wrapping.type() == DensityFunctionTypes.Wrapping.Type.CACHE_ALL_IN_CELL) {
-			this.noisiumed$cellCacheWrapCount++;
-			this.noisiumed$capturedCellDensity = cir.getReturnValue();
+		if (!(function instanceof DensityFunctionTypes.Wrapping wrapping)) {
+			return;
 		}
+		if (wrapping.type() != DensityFunctionTypes.Wrapping.Type.CACHE_ALL_IN_CELL) {
+			return;
+		}
+		if (!DensitySpecializer.isBeardifiedFinalDensity(wrapping.wrapped())) {
+			return;
+		}
+		this.noisiumed$primaryCellDensity = cir.getReturnValue();
 	}
 
 	@Inject(method = "<init>", at = @At("RETURN"))
@@ -96,11 +102,7 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 		if (!NoisiumedConfig.cellDensityGrid()) {
 			return;
 		}
-		// Ambiguous multi-cache graphs: fall back to vanilla sampleBlockState (accuracy first).
-		if (this.noisiumed$cellCacheWrapCount != 1) {
-			return;
-		}
-		DensityFunction cell = this.noisiumed$capturedCellDensity;
+		DensityFunction cell = this.noisiumed$primaryCellDensity;
 		if (cell == null) {
 			return;
 		}
@@ -121,7 +123,6 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 		if (sampler instanceof FastDualBlockSampler dual) {
 			this.noisiumed$secondarySampler = dual.second();
 		} else if (sampler instanceof FastTripleBlockSampler) {
-			// Triple chains are rare and not modeled; stay on vanilla path.
 			this.noisiumed$primaryDensityCache = null;
 			return;
 		} else if (sampler instanceof FastSingleBlockSampler) {
@@ -144,7 +145,7 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 
 	/**
 	 * @author Infernos
-	 * @reason Cell-cache density + solid early-out + monomorphic aquifer; optional ore veins.
+	 * @reason Cell-cache density for finalDensity+beard + solid early-out + monomorphic aquifer.
 	 */
 	@Overwrite
 	@Nullable
@@ -165,7 +166,6 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 			final ChunkNoiseSampler self = (ChunkNoiseSampler) (Object) this;
 
 			// NC-4: vanilla NoiseBasedAquifer returns null immediately when density > 0 (solid).
-			// Skip the full aquifer implementation; clear fluid-tick flag for parity.
 			if (density > 0.0) {
 				AquiferSampler aquifer = this.aquiferSampler;
 				if (aquifer instanceof AquiferImplAccess access) {
@@ -188,4 +188,3 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 		return this.blockStateSampler.sample((ChunkNoiseSampler) (Object) this);
 	}
 }
-

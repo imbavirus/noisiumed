@@ -44,17 +44,20 @@ public class NoiseChunkGeneratorSurfaceMixin {
 			// Keep pending so RETURN can rebuild after surface mutates top blocks.
 		}
 
-		// Only skip surface when every section is empty (same outcome as vanilla for void columns).
-		// Do not trust l1HasSolid alone — it can miss edge cases after count/palette paths.
-		ChunkSection[] sections = chunk.getSectionArray();
-		boolean allEmpty = true;
-		for (ChunkSection section : sections) {
-			if (section != null && !section.isEmpty()) {
-				allEmpty = false;
-				break;
+		// Skip empty surface: L1 solid flag is exact (we only write non-air). Fall back to
+		// section emptiness for non-L1 / edge paths. Same outcome as vanilla (no top blocks).
+		boolean skip = ChunkGenAttachment.wasL1Used(chunk) && !ChunkGenAttachment.l1HasSolid(chunk);
+		if (!skip) {
+			ChunkSection[] sections = chunk.getSectionArray();
+			skip = true;
+			for (ChunkSection section : sections) {
+				if (section != null && !section.isEmpty()) {
+					skip = false;
+					break;
+				}
 			}
 		}
-		if (allEmpty) {
+		if (skip) {
 			PathMetrics.recordSurfaceSkip();
 			PathMetrics.record(PathTier.L2);
 			finalizeDeferredHeightmaps(chunk);
