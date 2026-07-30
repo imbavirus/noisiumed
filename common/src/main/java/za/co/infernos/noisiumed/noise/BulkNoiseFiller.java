@@ -22,6 +22,13 @@ public final class BulkNoiseFiller {
 	/** When true, WG heightmaps are filled after surface (L2) instead of immediately after noise. */
 	public static volatile boolean DEFER_HEIGHTMAPS_UNTIL_SURFACE = true;
 
+	/**
+	 * W3 isolation: path MoE — skip fluid-tick bookkeeping when aquifer cannot place fluids.
+	 * Default on for this branch. Disable: {@code -Dnoisiumed.exp.w3.path.moe=false}
+	 */
+	public static final boolean PATH_MOE = !"false".equalsIgnoreCase(
+			System.getProperty("noisiumed.exp.w3.path.moe", "true"));
+
 	private BulkNoiseFiller() {}
 
 	/**
@@ -56,9 +63,12 @@ public final class BulkNoiseFiller {
 			int verticalCellBlockCount = samplerAccess.noisiumed$getVerticalCellBlockCount();
 			int cellWidth = 16 / horizontalCellBlockCount;
 			int minY = chunk.getBottomY();
-			// Mutable always available: vanilla checks needsFluidTick() after each sample
-			// (flag can flip mid-chunk when aquifers place fluids).
-			BlockPos.Mutable mutable = new BlockPos.Mutable();
+			// W3 path MoE: disabled / sea-level aquifers never need post-process fluid ticks.
+			// NoiseBasedAquifer is Yarn AquiferSampler$Impl — only that type flips needsFluidTick.
+			final boolean fluidTicksPossible = PATH_MOE && aquiferSampler != null
+					&& aquiferSampler.getClass().getName().endsWith("AquiferSampler$Impl");
+			// Mutable only when fluid ticks possible (saves alloc + branch on aquifers-off).
+			BlockPos.Mutable mutable = fluidTicksPossible ? new BlockPos.Mutable() : null;
 
 			// NC-3: primary density from cell cache — skip interpolator lerp; still set cell indices.
 			final CellGridPositionAccess cellGrid =
@@ -185,7 +195,10 @@ public final class BulkNoiseFiller {
 									}
 
 									// Per-block (vanilla): aquifer flag updates after each non-solid sample.
-									if (aquiferSampler.needsFluidTick() && !state.getFluidState().isEmpty()) {
+									if (fluidTicksPossible
+											&& aquiferSampler.needsFluidTick()
+											&& !state.getFluidState().isEmpty()) {
+										//noinspection DataFlowIssue
 										mutable.set(blockX, blockY, blockZ);
 										chunk.markBlockForPostProcessing(mutable);
 									}
