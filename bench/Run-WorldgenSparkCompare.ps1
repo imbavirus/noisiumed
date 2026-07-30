@@ -34,7 +34,28 @@ function Invoke-Rcon([string]$Command) {
 function Prepare-ServerDir {
   param([string]$Name, [string[]]$ModJars, [int]$Port, [int]$RPort)
   $dir = Join-Path $BenchRoot "run-$Name"
-  if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+  if (Test-Path $dir) {
+    # Only stop java under this run dir (never other MC servers), then delete with retries.
+    $dirEsc = [regex]::Escape($dir)
+    Get-CimInstance Win32_Process -Filter "Name='java.exe'" -EA SilentlyContinue |
+      Where-Object { $_.CommandLine -and $_.CommandLine -match $dirEsc } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue }
+    Start-Sleep -Milliseconds 500
+    for ($attempt = 0; $attempt -lt 8; $attempt++) {
+      try {
+        Remove-Item $dir -Recurse -Force -ErrorAction Stop
+        break
+      } catch {
+        Start-Sleep -Seconds 1
+        if ($attempt -eq 7) {
+          # Leave world/logs if locked; wipe mods so the right jar is used.
+          $mods = Join-Path $dir "mods"
+          if (Test-Path $mods) { Get-ChildItem $mods -Filter "*.jar" -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue }
+          Write-Host "WARN: could not fully remove $dir ($($_.Exception.Message)); reusing tree" -ForegroundColor Yellow
+        }
+      }
+    }
+  }
   New-Item -ItemType Directory -Force -Path $dir, (Join-Path $dir "mods") | Out-Null
 
   $libLink = Join-Path $dir "libraries"
@@ -108,9 +129,8 @@ function Run-SparkWorldgen {
   param([string]$Label, [string]$ServerDir, [int]$Port, [int]$RPort)
 
   $script:RconPort = $RPort
-  $logFile = Join-Path $results "$Label-console.log"
   $summaryFile = Join-Path $results "$Label-summary.txt"
-  if (Test-Path $logFile) { Remove-Item $logFile -Force }
+  $logFile = Join-Path $results ("{0}-console-{1}.log" -f $Label, (Get-Date -Format "yyyyMMdd-HHmmss"))
 
   $wall = [ordered]@{
     t_start = Get-Date

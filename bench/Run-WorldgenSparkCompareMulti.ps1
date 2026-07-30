@@ -127,13 +127,14 @@ $fSparks = New-Object System.Collections.Generic.List[string]
 $runRows = New-Object System.Collections.Generic.List[string]
 
 function Stop-BenchJavaOnly {
-  # Never kill unrelated Minecraft/Java servers — only harness run trees under this bench root.
+  # Never kill unrelated Minecraft/Java servers — only this harness (paths, labels, or bench ports).
   $root = [regex]::Escape($BenchRoot)
   Get-CimInstance Win32_Process -Filter "Name='java.exe'" -EA SilentlyContinue |
     Where-Object {
       $_.CommandLine -and (
         $_.CommandLine -match $root -or
-        $_.CommandLine -match 'run-noisiumed|run-fastnoise|run-parity'
+        $_.CommandLine -match 'run-noisiumed|run-fastnoise|run-parity' -or
+        $_.CommandLine -match '25570|25571|25575|25576|25580|25581'
       )
     } |
     ForEach-Object {

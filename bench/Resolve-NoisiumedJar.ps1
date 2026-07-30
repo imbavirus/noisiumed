@@ -2,7 +2,7 @@
 function Resolve-NoisiumedJar {
   param(
     [Parameter(Mandatory)][string]$JarsDir,
-    [string]$PreferName = "noisiumed-4.0.0-beta.16.5-neoforge-1.21.1.jar"
+    [string]$PreferName = "noisiumed-4.0.0-beta.16.5-w8-neoforge-1.21.1.jar"
   )
   $exact = Join-Path $JarsDir $PreferName
   if (Test-Path $exact) {
