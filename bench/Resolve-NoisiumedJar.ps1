@@ -13,7 +13,7 @@ function Resolve-NoisiumedJar {
   $bestKey = $null
   foreach ($f in Get-ChildItem $JarsDir -Filter "noisiumed-*-neoforge-1.21.1.jar" -EA SilentlyContinue) {
     # 4.0.0-beta.16.2 or 4.0.0 (release)
-    if ($f.Name -notmatch 'noisiumed-(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+)(?:\.(\d+))?)?-neoforge') {
+    if ($f.Name -notmatch 'noisiumed-(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+)(?:\.(\d+))?)?(?:-w\d+)?-neoforge') {
       continue
     }
     $maj = [int]$Matches[1]

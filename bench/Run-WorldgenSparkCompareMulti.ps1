@@ -6,7 +6,11 @@ param(
   [int]$ProfileSeconds = 100,
   [int]$Seed = 12345,
   [string]$BenchRoot = $PSScriptRoot,
-  [double]$SpikeFactor = 1.5
+  [double]$SpikeFactor = 1.5,
+  # Exact jar file name under bench/jars (or full path). Overrides PreferName pin.
+  [string]$NoisiumedJar = "",
+  [string]$PreferName = "",
+  [string]$ReportSuffix = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,8 +20,21 @@ $jars = Join-Path $BenchRoot "jars"
 . (Join-Path $BenchRoot "Resolve-NoisiumedJar.ps1")
 New-Item -ItemType Directory -Force -Path $results | Out-Null
 
-$pinnedJar = Resolve-NoisiumedJar -JarsDir $jars
+if ($NoisiumedJar -and (Test-Path $NoisiumedJar)) {
+  $pinnedJar = (Resolve-Path $NoisiumedJar).Path
+} elseif ($PreferName) {
+  $pinnedJar = Resolve-NoisiumedJar -JarsDir $jars -PreferName $PreferName
+} else {
+  $pinnedJar = Resolve-NoisiumedJar -JarsDir $jars
+}
+# Install into run-noisiumed mods before compare script rebuilds tree
+$runMods = Join-Path $BenchRoot "run-noisiumed\mods"
+New-Item -ItemType Directory -Force -Path $runMods | Out-Null
+Get-ChildItem $runMods -Filter "noisiumed*.jar" -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue
+Copy-Item $pinnedJar $jars -Force -EA SilentlyContinue
+Copy-Item $pinnedJar $runMods -Force
 Write-Host "Pinned Noisiumed jar: $pinnedJar" -ForegroundColor Cyan
+$env:NOISIUMED_JAR = $pinnedJar
 
 function Parse-SummaryWall([string]$path) {
   $map = @{}
@@ -127,7 +144,20 @@ $fSparks = New-Object System.Collections.Generic.List[string]
 $runRows = New-Object System.Collections.Generic.List[string]
 
 function Stop-BenchJavaOnly {
-  # Never kill unrelated Minecraft/Java servers — only harness run trees under this bench root.
+  # Never kill unrelated Minecraft/Java servers — only harness ports + run trees.
+  foreach ($port in 25570, 25571, 25575, 25576, 25580, 25581) {
+    netstat -ano 2>$null | Select-String "LISTENING" | ForEach-Object {
+      $line = $_.Line
+      if ($line -match (":$port\s+") -and $line -match '\s+(\d+)\s*$') {
+        $procId = [int]$Matches[1]
+        $p = Get-Process -Id $procId -EA SilentlyContinue
+        if ($p -and $p.ProcessName -eq 'java') {
+          Write-Host "Stopping bench java pid=$procId port=$port" -ForegroundColor DarkYellow
+          Stop-Process -Id $procId -Force -EA SilentlyContinue
+        }
+      }
+    }
+  }
   $root = [regex]::Escape($BenchRoot)
   Get-CimInstance Win32_Process -Filter "Name='java.exe'" -EA SilentlyContinue |
     Where-Object {
@@ -138,6 +168,16 @@ function Stop-BenchJavaOnly {
     } |
     ForEach-Object {
       Write-Host "Stopping bench java pid=$($_.ProcessId)" -ForegroundColor DarkYellow
+      Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue
+    }
+  Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" -EA SilentlyContinue |
+    Where-Object {
+      $_.CommandLine -and (
+        $_.CommandLine -match 'start-bench\.cmd' -or
+        $_.CommandLine -match 'run-noisiumed|run-fastnoise|run-parity'
+      )
+    } |
+    ForEach-Object {
       Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue
     }
 }
@@ -289,7 +329,8 @@ $report += ("- Multi mean ≥5% faster: **{0}** ({1})" -f $(if ($null -ne $pctMe
 $report += ("- Combined dominance gate: **{0}**" -f $(if ($gate) { "PASS" } else { "FAIL" }))
 $report += ""
 
-$out = Join-Path $results "MULTI_COMPARE_REPORT.md"
+$reportName = if ($ReportSuffix) { "MULTI_COMPARE_REPORT_$ReportSuffix.md" } else { "MULTI_COMPARE_REPORT.md" }
+$out = Join-Path $results $reportName
 $report | Set-Content $out -Encoding utf8
 Write-Host "DONE multi-report -> $out" -ForegroundColor Magenta
 Write-Host ("MEAN  N={0:F0} FN={1:F0}  ({2})" -f $avgN, $avgF, $(if ($null -ne $pctMean) { "{0:F1}% N faster" -f $pctMean } else { "n/a" })) -ForegroundColor Yellow
