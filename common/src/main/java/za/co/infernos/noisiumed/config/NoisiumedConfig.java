@@ -31,16 +31,30 @@ public final class NoisiumedConfig {
 	private static final boolean CELL_DENSITY_GRID = parseBool("noisiumed.cell.density.grid", "NOISIUMED_CELL_DENSITY_GRID", true);
 
 	/**
-	 * NC-5 monomorphic ore sampler. Disable with {@code -Dnoisiumed.fast.ore=false} for A/B.
+	 * NC-5 monomorphic ore sampler. Default <strong>off</strong> until golden hash PASS
+	 * (bisect: largest single parity delta). Enable: {@code -Dnoisiumed.fast.ore=true}.
 	 */
-	private static final boolean FAST_ORE = parseBool("noisiumed.fast.ore", "NOISIUMED_FAST_ORE", true);
+	private static final boolean FAST_ORE = parseBool("noisiumed.fast.ore", "NOISIUMED_FAST_ORE", false);
 
 	/**
 	 * Specialize aquifer density nodes (barrier/floodedness/spread/type/erosion/depth).
-	 * Disable with {@code -Dnoisiumed.aquifer.specialize=false}.
+	 * Default <strong>off</strong> until golden hash PASS. Enable:
+	 * {@code -Dnoisiumed.aquifer.specialize=true}.
 	 */
 	private static final boolean AQUIFER_SPECIALIZE = parseBool(
-			"noisiumed.aquifer.specialize", "NOISIUMED_AQUIFER_SPECIALIZE", true);
+			"noisiumed.aquifer.specialize", "NOISIUMED_AQUIFER_SPECIALIZE", false);
+
+	/**
+	 * L1 bulk noise fill. Disable with {@code -Dnoisiumed.l1=false} (force L0 vanilla loop).
+	 */
+	private static final boolean L1_ENABLED = parseBool("noisiumed.l1", "NOISIUMED_L1", true);
+
+	/**
+	 * Density arithmetic specializer (SpecDensity). Disable with
+	 * {@code -Dnoisiumed.density.specialize=false}.
+	 */
+	private static final boolean DENSITY_SPECIALIZE = parseBool(
+			"noisiumed.density.specialize", "NOISIUMED_DENSITY_SPECIALIZE", true);
 
 	private NoisiumedConfig() {}
 
@@ -58,6 +72,14 @@ public final class NoisiumedConfig {
 
 	public static boolean aquiferSpecialize() {
 		return AQUIFER_SPECIALIZE;
+	}
+
+	public static boolean l1Enabled() {
+		return L1_ENABLED;
+	}
+
+	public static boolean densitySpecialize() {
+		return DENSITY_SPECIALIZE;
 	}
 
 	public static boolean isL1GeneratorAllowed(@NotNull Class<?> generatorRuntimeClass) {

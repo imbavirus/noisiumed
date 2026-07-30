@@ -185,12 +185,12 @@ function Run-ParityGen {
 
   $world = Join-Path $dir "world"
   $outJson = Join-Path $results "parity-$Label-hash.json"
-  & python $hashPy $world --radius $RadiusChunks --seed $Seed --out $outJson
+  & python $hashPy $world --radius $RadiusChunks --seed $Seed --out $outJson | Write-Host
   $code = $LASTEXITCODE
   if ($code -ne 0 -and $code -ne 3) {
     Write-Host "hash exit=$code (3=missing chunks ok-ish)" -ForegroundColor Yellow
   }
-  return $outJson
+  return ,$outJson
 }
 
 # kill leftover parity java

@@ -3,6 +3,7 @@ package za.co.infernos.noisiumed.density.special;
 import net.minecraft.world.gen.densityfunction.DensityFunction;
 import net.minecraft.world.gen.densityfunction.DensityFunctionTypes;
 import org.jetbrains.annotations.NotNull;
+import za.co.infernos.noisiumed.config.NoisiumedConfig;
 import za.co.infernos.noisiumed.path.PathMetrics;
 
 /**
@@ -16,6 +17,9 @@ public final class DensitySpecializer {
 	 * @return specialized form, or {@code function} if no rewrite applies
 	 */
 	public static @NotNull DensityFunction specialize(@NotNull DensityFunction function) {
+		if (!NoisiumedConfig.densitySpecialize()) {
+			return function;
+		}
 		if (function instanceof SpecDensity) {
 			return function;
 		}

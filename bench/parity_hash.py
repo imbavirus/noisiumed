@@ -90,6 +90,13 @@ def as_int(v: Any) -> int:
         return int(str(v))
 
 
+def chunk_status(root: Any) -> str:
+    st = root.get("Status")
+    if st is None and "Level" in root:
+        st = root["Level"].get("Status")
+    return str(st) if st is not None else ""
+
+
 def hash_chunk_sections(root: Any) -> str:
     h = hashlib.sha256()
     # nbtlib File acts as root compound
@@ -104,6 +111,9 @@ def hash_chunk_sections(root: Any) -> str:
         cz = as_int(root.get("zPos", 0))
 
     h.update(struct.pack(">ii", cx, cz))
+    # Include status so incomplete gen cannot silently match another incomplete world.
+    h.update(chunk_status(root).encode("utf-8"))
+    h.update(b"|")
     if not sections:
         h.update(b"empty")
         return h.hexdigest()
@@ -170,8 +180,10 @@ def load_chunk_root(world_dir: Path, cx: int, cz: int) -> Optional[Any]:
 
 def hash_world(world_dir: Path, radius: int) -> Dict[str, Any]:
     chunks: Dict[str, str] = {}
+    statuses: Dict[str, str] = {}
     missing = 0
     errors = 0
+    not_full = 0
     for cx, cz in iter_chunks(radius):
         key = f"{cx},{cz}"
         try:
@@ -179,11 +191,17 @@ def hash_world(world_dir: Path, radius: int) -> Dict[str, Any]:
             if root is None:
                 missing += 1
                 chunks[key] = "MISSING"
+                statuses[key] = "MISSING"
                 continue
+            st = chunk_status(root)
+            statuses[key] = st
+            if "full" not in st.lower() and "minecraft:full" not in st.lower():
+                not_full += 1
             chunks[key] = hash_chunk_sections(root)
         except Exception as ex:
             errors += 1
             chunks[key] = f"ERROR:{type(ex).__name__}:{ex}"
+            statuses[key] = "ERROR"
 
     h = hashlib.sha256()
     for key in sorted(chunks.keys(), key=lambda k: (int(k.split(",")[1]), int(k.split(",")[0]))):
@@ -197,6 +215,8 @@ def hash_world(world_dir: Path, radius: int) -> Dict[str, Any]:
         "chunk_count": len(chunks),
         "missing": missing,
         "errors": errors,
+        "not_full": not_full,
+        "statuses": statuses,
         "overall": h.hexdigest(),
         "chunks": chunks,
     }
@@ -260,7 +280,7 @@ def main() -> int:
         Path(args.out).write_text(text, encoding="utf-8")
         print(
             f"wrote {args.out} overall={report['overall']} "
-            f"missing={report['missing']} errors={report['errors']}"
+            f"missing={report['missing']} errors={report['errors']} not_full={report['not_full']}"
         )
     else:
         print(text)

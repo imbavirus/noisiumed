@@ -30,6 +30,9 @@ public final class PathSelector {
 			@NotNull Class<?> generatorRuntimeClass,
 			@NotNull Chunk chunk
 	) {
+		if (!NoisiumedConfig.l1Enabled()) {
+			return Decision.l0(L0Reason.UNSAFE_SECTIONS);
+		}
 		if (SharedConstants.isOutsideGenerationArea(chunk.getPos())) {
 			return Decision.l0(L0Reason.OUTSIDE_GEN_AREA);
 		}

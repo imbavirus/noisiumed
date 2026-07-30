@@ -9,11 +9,12 @@ import net.minecraft.world.gen.chunk.ChunkNoiseSampler;
 import net.minecraft.world.gen.densityfunction.DensityFunction;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import za.co.infernos.noisiumed.density.special.DensitySpecializer;
-
 /**
  * Monomorphic ore-vein secondary sampler (replaces OreVeinSampler lambda).
  * Bit-identical control flow to vanilla {@code OreVeinSampler} method_40547.
+ * <p>
+ * Does <strong>not</strong> re-specialize density inputs (they are already wrapped by
+ * NoiseChunk); extra specialize broke golden hashes (bisect: ore_off 16/25 vs full 4/25).
  */
 public final class FastOreVeinSampler implements ChunkNoiseSampler.BlockStateSampler {
 	// Vanilla constants (1.21.1 OreVeinSampler)
@@ -38,9 +39,9 @@ public final class FastOreVeinSampler implements ChunkNoiseSampler.BlockStateSam
 			@NotNull DensityFunction veinGap,
 			@NotNull RandomSplitter randomSplitter
 	) {
-		this.veinToggle = DensitySpecializer.specialize(veinToggle);
-		this.veinRidged = DensitySpecializer.specialize(veinRidged);
-		this.veinGap = DensitySpecializer.specialize(veinGap);
+		this.veinToggle = veinToggle;
+		this.veinRidged = veinRidged;
+		this.veinGap = veinGap;
 		this.randomSplitter = randomSplitter;
 	}
 
