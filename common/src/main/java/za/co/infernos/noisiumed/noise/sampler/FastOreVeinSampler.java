@@ -108,8 +108,12 @@ public final class FastOreVeinSampler implements ChunkNoiseSampler.BlockStateSam
 				(double) MIN_ORE_CHANCE,
 				(double) MAX_ORE_CHANCE
 		);
-		if ((double) random.nextFloat() < oreChance
-				&& this.veinGap.sample(pos) > VEIN_GAP_THRESHOLD) {
+		// W6: sample gap DF only when the ore-chance roll succeeds (parity: stone otherwise).
+		// Vanilla AND-short-circuits the same way; avoids a full DF sample on most vein blocks.
+		if ((double) random.nextFloat() >= oreChance) {
+			return veinType.stone;
+		}
+		if (this.veinGap.sample(pos) > VEIN_GAP_THRESHOLD) {
 			return random.nextFloat() < RAW_ORE_BLOCK_CHANCE
 					? veinType.rawOreBlock
 					: veinType.ore;
