@@ -49,7 +49,6 @@ public final class BulkNoiseFiller {
 			int chunkStartX = chunkPos.getStartX();
 			int chunkStartZ = chunkPos.getStartZ();
 			AquiferSampler aquiferSampler = chunkNoiseSampler.getAquiferSampler();
-			final boolean needsFluidTick = aquiferSampler.needsFluidTick();
 			chunkNoiseSampler.sampleStartDensity();
 
 			ChunkNoiseSamplerAccessor samplerAccess = (ChunkNoiseSamplerAccessor) chunkNoiseSampler;
@@ -57,7 +56,9 @@ public final class BulkNoiseFiller {
 			int verticalCellBlockCount = samplerAccess.noisiumed$getVerticalCellBlockCount();
 			int cellWidth = 16 / horizontalCellBlockCount;
 			int minY = chunk.getBottomY();
-			BlockPos.Mutable mutable = needsFluidTick ? new BlockPos.Mutable() : null;
+			// Mutable always available: vanilla checks needsFluidTick() after each sample
+			// (flag can flip mid-chunk when aquifers place fluids).
+			BlockPos.Mutable mutable = new BlockPos.Mutable();
 
 			final double invHoriz = 1.0 / (double) horizontalCellBlockCount;
 			final double invVert = 1.0 / (double) verticalCellBlockCount;
@@ -123,36 +124,38 @@ public final class BulkNoiseFiller {
 										state = samplerAccess.noisiumed$sampleBlockState();
 									}
 
-									if (state == DirectSectionWriter.AIR) {
+									// Vanilla: null → default stone; AIR / outside → skip write.
+									if (state == null) {
+										state = defaultBlockState;
+									}
+									if (state.isAir()) {
 										continue;
 									}
 
 									if (detailTiming) {
 										long tW = System.nanoTime();
-										if (state == null) {
+										if (state == defaultBlockState) {
 											writer.setDefaultBlock(
 													blockXInSection, blockYInSection, blockZInSection, defaultBlockState
 											);
-											state = defaultBlockState;
 										} else {
 											writer.setBlockState(
 													blockXInSection, blockYInSection, blockZInSection, state
 											);
 										}
 										writeNs += System.nanoTime() - tW;
-									} else if (state == null) {
+									} else if (state == defaultBlockState) {
 										writer.setDefaultBlock(
 												blockXInSection, blockYInSection, blockZInSection, defaultBlockState
 										);
-										state = defaultBlockState;
 									} else {
 										writer.setBlockState(
 												blockXInSection, blockYInSection, blockZInSection, state
 										);
 									}
 
-									if (needsFluidTick && !state.getFluidState().isEmpty()) {
-										//noinspection DataFlowIssue
+									// Per-block (vanilla): aquifer flag updates after each sample.
+									if (aquiferSampler.needsFluidTick() && !state.getFluidState().isEmpty()) {
 										mutable.set(blockX, blockY, blockZ);
 										chunk.markBlockForPostProcessing(mutable);
 									}

@@ -36,6 +36,14 @@ public class NoiseChunkGeneratorSurfaceMixin {
 			Chunk chunk,
 			CallbackInfo ci
 	) {
+		// L1 defers WG heightmaps during the sample loop for speed. Vanilla surface rules
+		// expect OCEAN_FLOOR_WG / WORLD_SURFACE_WG to already reflect noise fill — flush
+		// them here BEFORE surface runs (not only after). Skipping this made surface wrong.
+		if (ChunkGenAttachment.isHeightmapsPending(chunk)) {
+			DeferredHeightmaps.populateAfterNoise(chunk);
+			// Keep pending so RETURN can rebuild after surface mutates top blocks.
+		}
+
 		// Fast path: L1 already knows whether any non-air was written.
 		if (ChunkGenAttachment.wasL1Used(chunk) && !ChunkGenAttachment.l1HasSolid(chunk)) {
 			PathMetrics.recordSurfaceSkip();
@@ -74,8 +82,15 @@ public class NoiseChunkGeneratorSurfaceMixin {
 	) {
 		if (ChunkGenAttachment.wasL1Used(chunk)) {
 			PathMetrics.record(PathTier.L2);
+			// Surface may have replaced top blocks; rebuild WG heightmaps from final sections
+			// (parity with vanilla per-block trackUpdate during surface).
+			if (ChunkGenAttachment.isHeightmapsPending(chunk)
+					|| ChunkGenAttachment.l1HasSolid(chunk)) {
+				DeferredHeightmaps.populateAfterSurface(chunk);
+				ChunkGenAttachment.clearHeightmapsPending(chunk);
+			}
 		}
-		finalizeDeferredHeightmaps(chunk);
+		ChunkGenAttachment.clearAll(chunk);
 	}
 
 	private static void finalizeDeferredHeightmaps(Chunk chunk) {
