@@ -19,7 +19,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import za.co.infernos.noisiumed.config.NoisiumedConfig;
 import za.co.infernos.noisiumed.density.special.DensitySpecializer;
 import za.co.infernos.noisiumed.mixin.ChainedBlockSourceAccessor;
+import za.co.infernos.noisiumed.noise.CellGridPositionAccess;
 import za.co.infernos.noisiumed.noise.sampler.FastDualBlockSampler;
+import za.co.infernos.noisiumed.noise.sampler.FastOreVeinSampler;
 import za.co.infernos.noisiumed.noise.sampler.FastSingleBlockSampler;
 import za.co.infernos.noisiumed.noise.sampler.FastTripleBlockSampler;
 import za.co.infernos.noisiumed.path.PathMetrics;
@@ -36,10 +38,12 @@ import java.util.List;
  *   <li>density &gt; 0 → solid early-out (skip full aquifer), optional ore secondary</li>
  *   <li>else → {@code aquifer.apply(pos, density)} then ore</li>
  * </ul>
+ * Also implements {@link CellGridPositionAccess}: position-only cell updates without
+ * interpolator lerp (primary density is cached; aquifer/ore use block coords).
  * Disable: {@code -Dnoisiumed.cell.density.grid=false}
  */
 @Mixin(value = ChunkNoiseSampler.class, priority = 1200)
-public abstract class ChunkNoiseSamplerNc3Mixin {
+public abstract class ChunkNoiseSamplerNc3Mixin implements CellGridPositionAccess {
 	@Shadow
 	@Final
 	private AquiferSampler aquiferSampler;
@@ -62,6 +66,14 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 	private int cellBlockY;
 	@Shadow
 	private int cellBlockZ;
+	@Shadow
+	private int startBlockX;
+	@Shadow
+	private int startBlockY;
+	@Shadow
+	private int startBlockZ;
+	@Shadow
+	private long sampleUniqueIndex;
 
 	/** CellCache for finalDensity+beard only. */
 	@Unique
@@ -75,6 +87,18 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 
 	@Unique
 	private boolean noisiumed$cellGridSample;
+
+	/** Cached when aquifer is Impl — avoid per-block instanceof on solid early-out. */
+	@Unique
+	private @Nullable AquiferImplAccess noisiumed$aquiferAccess;
+
+	/** Precomputed cell strides for density index (w, h, w*w). */
+	@Unique
+	private int noisiumed$cellW;
+	@Unique
+	private int noisiumed$cellH;
+	@Unique
+	private int noisiumed$cellStrideY;
 
 	/**
 	 * Capture CellCache for {@code cacheAllInCell(add(final, beard))} only — matches the
@@ -118,6 +142,9 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 			return;
 		}
 		this.noisiumed$primaryDensityCache = cache;
+		this.noisiumed$cellW = w;
+		this.noisiumed$cellH = h;
+		this.noisiumed$cellStrideY = w * w;
 
 		ChunkNoiseSampler.BlockStateSampler sampler = this.blockStateSampler;
 		if (sampler instanceof FastDualBlockSampler dual) {
@@ -139,6 +166,9 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 			}
 		}
 
+		AquiferSampler aquifer = this.aquiferSampler;
+		this.noisiumed$aquiferAccess = aquifer instanceof AquiferImplAccess access ? access : null;
+
 		this.noisiumed$cellGridSample = true;
 		PathMetrics.recordNc3CellGrid();
 	}
@@ -150,41 +180,73 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 	@Overwrite
 	@Nullable
 	public BlockState sampleBlockState() {
-		if (this.noisiumed$cellGridSample) {
-			final int w = this.horizontalCellBlockCount;
-			final int h = this.verticalCellBlockCount;
-			final int i = this.cellBlockX;
-			final int j = this.cellBlockY;
-			final int k = this.cellBlockZ;
-			// Vanilla CellCache falls back to delegate.sample when indices are OOB.
-			if (i < 0 || j < 0 || k < 0 || i >= w || j >= h || k >= w) {
-				return this.blockStateSampler.sample((ChunkNoiseSampler) (Object) this);
-			}
-			final double[] cache = this.noisiumed$primaryDensityCache;
-			// Same layout as CacheAllInCell.sample / fillAllDirectly (y high→low, then x, then z).
-			final double density = cache[((h - 1 - j) * w + i) * w + k];
-			final ChunkNoiseSampler self = (ChunkNoiseSampler) (Object) this;
+		if (!this.noisiumed$cellGridSample) {
+			return this.blockStateSampler.sample((ChunkNoiseSampler) (Object) this);
+		}
+		final int w = this.noisiumed$cellW;
+		final int h = this.noisiumed$cellH;
+		final int i = this.cellBlockX;
+		final int j = this.cellBlockY;
+		final int k = this.cellBlockZ;
+		// Vanilla CellCache falls back to delegate.sample when indices are OOB.
+		if (i < 0 || j < 0 || k < 0 || i >= w || j >= h || k >= w) {
+			return this.blockStateSampler.sample((ChunkNoiseSampler) (Object) this);
+		}
+		// Same layout as CacheAllInCell.sample / fillAllDirectly (y high→low, then x, then z).
+		final double density = this.noisiumed$primaryDensityCache[
+				(h - 1 - j) * this.noisiumed$cellStrideY + i * w + k];
+		final ChunkNoiseSampler self = (ChunkNoiseSampler) (Object) this;
+		final ChunkNoiseSampler.BlockStateSampler secondary = this.noisiumed$secondarySampler;
 
-			// NC-4: vanilla NoiseBasedAquifer returns null immediately when density > 0 (solid).
-			if (density > 0.0) {
-				AquiferSampler aquifer = this.aquiferSampler;
-				if (aquifer instanceof AquiferImplAccess access) {
-					access.noisiumed$setNeedsFluidTick(false);
-				}
-				ChunkNoiseSampler.BlockStateSampler secondary = this.noisiumed$secondarySampler;
-				return secondary != null ? secondary.sample(self) : null;
+		// NC-4: vanilla NoiseBasedAquifer returns null immediately when density > 0 (solid).
+		if (density > 0.0) {
+			AquiferImplAccess aq = this.noisiumed$aquiferAccess;
+			if (aq != null) {
+				aq.noisiumed$setNeedsFluidTick(false);
 			}
+			if (secondary == null) {
+				return null;
+			}
+			// Skip ore DF entirely outside the copper/iron Y union (parity: null).
+			int blockY = this.startBlockY + j;
+			if (!FastOreVeinSampler.mayHaveVeinAtY(blockY)) {
+				return null;
+			}
+			return secondary.sample(self);
+		}
 
-			BlockState state = this.aquiferSampler.apply(self, density);
-			if (state != null) {
-				return state;
-			}
-			ChunkNoiseSampler.BlockStateSampler secondary = this.noisiumed$secondarySampler;
-			if (secondary != null) {
-				return secondary.sample(self);
-			}
+		BlockState state = this.aquiferSampler.apply(self, density);
+		if (state != null) {
+			return state;
+		}
+		if (secondary == null) {
 			return null;
 		}
-		return this.blockStateSampler.sample((ChunkNoiseSampler) (Object) this);
+		int blockY = this.startBlockY + j;
+		if (!FastOreVeinSampler.mayHaveVeinAtY(blockY)) {
+			return null;
+		}
+		return secondary.sample(self);
+	}
+
+	@Override
+	public boolean noisiumed$cellGridActive() {
+		return this.noisiumed$cellGridSample;
+	}
+
+	@Override
+	public void noisiumed$positionY(int blockY) {
+		this.cellBlockY = blockY - this.startBlockY;
+	}
+
+	@Override
+	public void noisiumed$positionX(int blockX) {
+		this.cellBlockX = blockX - this.startBlockX;
+	}
+
+	@Override
+	public void noisiumed$positionZ(int blockZ) {
+		this.cellBlockZ = blockZ - this.startBlockZ;
+		this.sampleUniqueIndex++;
 	}
 }

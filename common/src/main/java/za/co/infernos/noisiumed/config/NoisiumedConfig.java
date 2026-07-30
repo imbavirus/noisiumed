@@ -57,6 +57,29 @@ public final class NoisiumedConfig {
 	private static final boolean DENSITY_SPECIALIZE = parseBool(
 			"noisiumed.density.specialize", "NOISIUMED_DENSITY_SPECIALIZE", true);
 
+	/**
+	 * beta.16.2: rewrite CellCache (+ interpolator) delegates after NoiseChunk ctor.
+	 * Default <strong>on</strong>. Disable: {@code -Dnoisiumed.density.deep=false}.
+	 * Uses per-chunk identity memo so Spec subtrees are shared (no alloc storm).
+	 */
+	private static final boolean DENSITY_DEEP = parseBool(
+			"noisiumed.density.deep", "NOISIUMED_DENSITY_DEEP", true);
+
+	/**
+	 * Also rewrite DensityInterpolator.delegate (memoized per NoiseChunk). Safe (no 3× wall),
+	 * but multi quiet-runs still slightly behind CellCache-only — default <strong>off</strong>.
+	 * Enable: {@code -Dnoisiumed.density.deep.interpolators=true}.
+	 */
+	private static final boolean DENSITY_DEEP_INTERPOLATORS = parseBool(
+			"noisiumed.density.deep.interpolators", "NOISIUMED_DENSITY_DEEP_INTERPOLATORS", false);
+
+	/**
+	 * Specialize {@code DensityFunctionTypes.Clamp}. Default on. Disable if golden bisect needs it:
+	 * {@code -Dnoisiumed.density.clamp=false}.
+	 */
+	private static final boolean DENSITY_CLAMP = parseBool(
+			"noisiumed.density.clamp", "NOISIUMED_DENSITY_CLAMP", true);
+
 	private NoisiumedConfig() {}
 
 	public static @NotNull Set<String> l1GeneratorAllowlist() {
@@ -81,6 +104,18 @@ public final class NoisiumedConfig {
 
 	public static boolean densitySpecialize() {
 		return DENSITY_SPECIALIZE;
+	}
+
+	public static boolean densityDeepSpecialize() {
+		return DENSITY_DEEP;
+	}
+
+	public static boolean densityDeepInterpolators() {
+		return DENSITY_DEEP_INTERPOLATORS;
+	}
+
+	public static boolean densityClampSpecialize() {
+		return DENSITY_CLAMP;
 	}
 
 	public static boolean isL1GeneratorAllowed(@NotNull Class<?> generatorRuntimeClass) {

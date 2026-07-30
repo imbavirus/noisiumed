@@ -6,17 +6,14 @@ import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 /**
- * Yarn CellCache → Mojmap CacheAllInCell.
+ * Mutable access to interpolator delegate for beta.16 deep specialize.
  */
-@Mixin(targets = "net.minecraft.world.gen.chunk.ChunkNoiseSampler$CellCache")
-public interface CellCacheAccess {
+@Mixin(targets = "net.minecraft.world.gen.chunk.ChunkNoiseSampler$DensityInterpolator")
+public interface DensityInterpolatorDelegateAccess {
 	@Accessor("delegate")
 	DensityFunction noisiumed$getDelegate();
 
 	@Accessor("delegate")
 	@Mutable
 	void noisiumed$setDelegate(DensityFunction delegate);
-
-	@Accessor("cache")
-	double[] noisiumed$getCache();
 }

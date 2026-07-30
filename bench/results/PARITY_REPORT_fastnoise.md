@@ -1,45 +1,16 @@
-# Golden section hash — baseline vs Fast Noise 1.0.13
+﻿# Golden section hash parity â€” baseline vs fastnoise
 
-Date: 2026-07-30  
-Seed=12345 · radiusChunks=2 (25 chunks) · Status=minecraft:full both sides  
+Date: 2026-07-30T04:40:00.8782680+02:00
+Seed=12345 radiusChunks=2
+Baseline: spark only (vanilla NoiseChunk)
+Candidate: zfastnoise-1.0.13+1.21.1+neoforge.jar
 
 | | |
 |--|--|
-| Baseline | spark only (vanilla) |
-| Candidate | `zfastnoise-1.0.13+1.21.1+neoforge.jar` |
-| chunk matches | **2 / 25** |
-| mismatches | **23** |
-| **PASS** | **false** |
+| baseline overall | 5c8e9294c0bb09795b06604cab73fbe61cd81bde44441c2f5c3f5bcfe63b66f1 |
+| fastnoise overall | 6df33a925491624dd39d2f93fdd376ae9afcfe149f7a2031b06d6ea765cbd577 |
+| chunk matches | 3 |
+| mismatches | 22 |
+| **PASS** | **False** |
 
-Same protocol as Noisiumed (`Run-ParityHash.ps1 -Candidate fastnoise`).
-
-## Head-to-head (same protocol)
-
-| Candidate | Matches / 25 | Mismatches | Notes |
-|-----------|--------------|------------|--------|
-| Fast Noise 1.0.13 | **2** | **23** | this run |
-| Noisiumed (defaults, ore/aq off) | ~2–10 | ~15–23 | prior FULL runs |
-| Noisiumed L1 off | **19** | **6** | best Noisiumed config so far |
-
-FN does **not** match vanilla section digests either under this FULL-world harness.
-
-## Important caveat (both mods)
-
-Vanilla **baseline overall hashes are not stable across separate server runs** with the same seed (different `parity-baseline-hash.json` overalls in the log history). FULL chunks include **features / decoration / multi-threaded gen order**, so this test is **not pure NoiseChunk bit-identity**.
-
-Implications:
-
-1. FN and Noisiumed both “fail” vanilla FULL hashes — that is expected if the harness is noisy.  
-2. Relative bisect **within one session** (same baseline file, progressive flags) is more trustworthy than absolute 25/25 PASS.  
-3. For true noise parity we need either:  
-   - hash after **noise fill only** (before features), or  
-   - single-threaded gen + fixed step order, or  
-   - compare Noisiumed L1 vs L0 in-process without features.
-
-## Command
-
-```powershell
-cd bench
-.\Run-ParityHash.ps1 -RadiusChunks 2 -Seed 12345 -Candidate fastnoise
-.\Run-ParityHash.ps1 -RadiusChunks 2 -Seed 12345 -Candidate noisiumed
-```
+Details: `bench/results/PARITY_COMPARE_fastnoise.json`

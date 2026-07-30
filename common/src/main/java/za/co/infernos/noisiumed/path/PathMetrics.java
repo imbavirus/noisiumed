@@ -32,6 +32,12 @@ public final class PathMetrics {
 	private static final LongAdder NC3_CELL_GRID = new LongAdder();
 	private static final LongAdder NC5_ORE = new LongAdder();
 	private static final LongAdder AQUIFER_SPEC = new LongAdder();
+	/** beta.16: CellCache/interpolator delegates rewritten in place. */
+	private static final LongAdder SPEC_DEEP = new LongAdder();
+	/** Sum of SpecDensity roots among installed delegates (coverage). */
+	private static final LongAdder SPEC_NODES = new LongAdder();
+	/** Sum of still-vanilla arithmetic roots among installed delegates. */
+	private static final LongAdder VANILLA_ARITH = new LongAdder();
 
 	private static final LongAdder[] L0_REASONS = new LongAdder[L0Reason.values().length];
 
@@ -142,6 +148,23 @@ public final class PathMetrics {
 		AQUIFER_SPEC.increment();
 	}
 
+	/** beta.16: number of CellCache/interpolator delegates rewritten. */
+	public static void recordSpecDeep(int count) {
+		if (count > 0) {
+			SPEC_DEEP.add(count);
+		}
+	}
+
+	/** Coverage after deep specialize: SpecDensity roots vs leftover vanilla arithmetic. */
+	public static void recordSpecCoverage(int specNodes, int vanillaArithNodes) {
+		if (specNodes > 0) {
+			SPEC_NODES.add(specNodes);
+		}
+		if (vanillaArithNodes > 0) {
+			VANILLA_ARITH.add(vanillaArithNodes);
+		}
+	}
+
 	public static long l0() {
 		return L0.sum();
 	}
@@ -217,7 +240,10 @@ public final class PathMetrics {
 				.append(" nc1_s3=").append(NC1_SAMPLER_3.sum())
 				.append(" nc3_grid=").append(NC3_CELL_GRID.sum())
 				.append(" nc5_ore=").append(NC5_ORE.sum())
-				.append(" aq_spec=").append(AQUIFER_SPEC.sum());
+				.append(" aq_spec=").append(AQUIFER_SPEC.sum())
+				.append(" spec_deep=").append(SPEC_DEEP.sum())
+				.append(" spec_nodes=").append(SPEC_NODES.sum())
+				.append(" vanilla_arith=").append(VANILLA_ARITH.sum());
 		sb.append(" l0_reasons{");
 		boolean first = true;
 		for (L0Reason r : L0Reason.values()) {
@@ -255,6 +281,9 @@ public final class PathMetrics {
 		NC3_CELL_GRID.reset();
 		NC5_ORE.reset();
 		AQUIFER_SPEC.reset();
+		SPEC_DEEP.reset();
+		SPEC_NODES.reset();
+		VANILLA_ARITH.reset();
 		for (LongAdder a : L0_REASONS) {
 			a.reset();
 		}

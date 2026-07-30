@@ -60,6 +60,12 @@ public final class BulkNoiseFiller {
 			// (flag can flip mid-chunk when aquifers place fluids).
 			BlockPos.Mutable mutable = new BlockPos.Mutable();
 
+			// NC-3: primary density from cell cache — skip interpolator lerp; still set cell indices.
+			final CellGridPositionAccess cellGrid =
+					chunkNoiseSampler instanceof CellGridPositionAccess cgp && cgp.noisiumed$cellGridActive()
+							? cgp
+							: null;
+
 			final double invHoriz = 1.0 / (double) horizontalCellBlockCount;
 			final double invVert = 1.0 / (double) verticalCellBlockCount;
 
@@ -93,7 +99,11 @@ public final class BulkNoiseFiller {
 						for (int verticalCellBlock = verticalCellBlockCount - 1; verticalCellBlock >= 0; verticalCellBlock--) {
 							int blockY = cellBaseY + verticalCellBlock;
 							int blockYInSection = blockY & 15;
-							chunkNoiseSampler.interpolateY(blockY, vertDeltas[verticalCellBlock]);
+							if (cellGrid != null) {
+								cellGrid.noisiumed$positionY(blockY);
+							} else {
+								chunkNoiseSampler.interpolateY(blockY, vertDeltas[verticalCellBlock]);
+							}
 
 							int cy = (blockY - minY) >> 4;
 							if (cy < 0 || cy >= sectionCount) {
@@ -108,12 +118,20 @@ public final class BulkNoiseFiller {
 							for (int cellBlockX = 0; cellBlockX < horizontalCellBlockCount; cellBlockX++) {
 								int blockX = baseX + cellBlockX;
 								int blockXInSection = blockX & 15;
-								chunkNoiseSampler.interpolateX(blockX, horizDeltas[cellBlockX]);
+								if (cellGrid != null) {
+									cellGrid.noisiumed$positionX(blockX);
+								} else {
+									chunkNoiseSampler.interpolateX(blockX, horizDeltas[cellBlockX]);
+								}
 
 								for (int cellBlockZ = 0; cellBlockZ < horizontalCellBlockCount; cellBlockZ++) {
 									int blockZ = baseZ + cellBlockZ;
 									int blockZInSection = blockZ & 15;
-									chunkNoiseSampler.interpolateZ(blockZ, horizDeltas[cellBlockZ]);
+									if (cellGrid != null) {
+										cellGrid.noisiumed$positionZ(blockZ);
+									} else {
+										chunkNoiseSampler.interpolateZ(blockZ, horizDeltas[cellBlockZ]);
+									}
 
 									BlockState state;
 									if (detailTiming) {
@@ -124,9 +142,21 @@ public final class BulkNoiseFiller {
 										state = samplerAccess.noisiumed$sampleBlockState();
 									}
 
-									// Vanilla: null → default stone; AIR / outside → skip write.
+									// Vanilla: null → default stone (solid). Solid never schedules fluid ticks
+									// (NC-3/vanilla clear needsFluidTick when density > 0). Skip fluid path.
 									if (state == null) {
-										state = defaultBlockState;
+										if (detailTiming) {
+											long tW = System.nanoTime();
+											writer.setDefaultBlock(
+													blockXInSection, blockYInSection, blockZInSection, defaultBlockState
+											);
+											writeNs += System.nanoTime() - tW;
+										} else {
+											writer.setDefaultBlock(
+													blockXInSection, blockYInSection, blockZInSection, defaultBlockState
+											);
+										}
+										continue;
 									}
 									if (state.isAir()) {
 										continue;
@@ -154,7 +184,7 @@ public final class BulkNoiseFiller {
 										);
 									}
 
-									// Per-block (vanilla): aquifer flag updates after each sample.
+									// Per-block (vanilla): aquifer flag updates after each non-solid sample.
 									if (aquiferSampler.needsFluidTick() && !state.getFluidState().isEmpty()) {
 										mutable.set(blockX, blockY, blockZ);
 										chunk.markBlockForPostProcessing(mutable);

@@ -198,6 +198,14 @@ Without N6c, N1d/N5 are too dangerous.
 
 N4\* after exclusive profiles demand it.
 
+### Milestone NC-7 — Deep specialize + Clamp (beta.16 → 16.1)
+
+1. **Root cause:** RETURN specialize only rewrites arithmetic *roots*. Hot fill lives under `CellCache.delegate`.
+2. beta.16 mistake: rewrote **every interpolator.delegate** → Spec tree alloc × interpolators × chunks → ~3× wall + golden crash (also nested `DensityScratch` clobber).
+3. **beta.16.1:** CellCache-only deep specialize default on; interpolator deep opt-in; nest-safe temps; Clamp Spec; pure-tree Spec check uses `original`.
+4. Metrics: `spec_deep`, `spec_nodes`, `vanilla_arith`.
+5. **Success:** multi-avg forceload ≥ FN without golden freefall.
+
 ### Milestone NC-6 — Parity + open aquifer (beta.12)
 
 1. Golden section hash harness: `bench/Run-ParityHash.ps1` + `parity_hash.py`  

@@ -38,10 +38,14 @@ public final class BinarySpecs {
 		public void fill(double[] densities, EachApplier applier) {
 			this.a.fill(densities, applier);
 			int len = densities.length;
-			double[] temp = DensityScratch.fillTemp(len);
-			this.b.fill(temp, applier);
-			for (int i = 0; i < len; i++) {
-				densities[i] += temp[i];
+			double[] temp = DensityScratch.acquireFillTemp(len);
+			try {
+				this.b.fill(temp, applier);
+				for (int i = 0; i < len; i++) {
+					densities[i] += temp[i];
+				}
+			} finally {
+				DensityScratch.releaseFillTemp();
 			}
 		}
 	}
@@ -65,6 +69,7 @@ public final class BinarySpecs {
 		@Override
 		public void fill(double[] densities, EachApplier applier) {
 			this.a.fill(densities, applier);
+			// Keep vanilla short-circuit: do not sample B when A is 0 (CacheOnce / order parity).
 			DensityFunction b = this.b;
 			for (int i = 0, n = densities.length; i < n; i++) {
 				double v = densities[i];

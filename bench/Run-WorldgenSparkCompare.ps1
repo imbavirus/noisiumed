@@ -221,8 +221,10 @@ function Run-SparkWorldgen {
   while (-not $p.HasExited -and (Get-Date) -lt $stopDl) { Start-Sleep -Milliseconds 400 }
   if (-not $p.HasExited) {
     Stop-Process -Id $p.Id -Force -EA SilentlyContinue
+    # Only children/siblings under this label's server dir — never other MC servers.
+    $dirEsc = [regex]::Escape($ServerDir)
     Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" -EA SilentlyContinue |
-      Where-Object { $_.CommandLine -match 'forgeserver|neoforge' } |
+      Where-Object { $_.CommandLine -and $_.CommandLine -match $dirEsc } |
       ForEach-Object { Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue }
   }
   $wall.t_stop = Get-Date
@@ -281,15 +283,11 @@ function Run-SparkWorldgen {
   return $summaryFile
 }
 
+. (Join-Path $BenchRoot "Resolve-NoisiumedJar.ps1")
 $sparkJar = Join-Path $jars "spark-1.10.124-neoforge.jar"
-$noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.12-neoforge-1.21.1.jar"
-if (-not (Test-Path $noisiumedJar)) {
-  $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.11-neoforge-1.21.1.jar"
-}
-if (-not (Test-Path $noisiumedJar)) {
-  $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.10-neoforge-1.21.1.jar"
-}
+$noisiumedJar = Resolve-NoisiumedJar -JarsDir $jars
 $fnJar = Join-Path $jars "zfastnoise-1.0.13+1.21.1+neoforge.jar"
+Write-Host "Noisiumed jar: $noisiumedJar" -ForegroundColor Cyan
 
 $report = New-Object System.Collections.Generic.List[string]
 $report.Add("# Noisiumed vs Fast Noise - Spark worldgen compare")
@@ -299,7 +297,7 @@ $report.Add("Seed=$Seed forceload radius=$RadiusChunks profile=${ProfileSeconds}
 $report.Add("Baseline mods: Spark + candidate only")
 $report.Add("Huge-win metrics: wall_boot_ms / wall_forceload_ms / wall_profile_window_ms / wall_total_ms + PathMetrics")
 $report.Add("")
-$report.Add("**Scope:** Primary **1.21.1**. A/B = **noisiumed-4.0.0-beta.3 (direct-write L1)** vs Fast Noise 1.0.13.")
+$report.Add("**Scope:** Primary **1.21.1**. A/B = **$(Split-Path $noisiumedJar -Leaf)** vs Fast Noise 1.0.13.")
 $report.Add("")
 
 if (-not $SkipNoisiumed) {

@@ -37,12 +37,11 @@ $nfWinArgs = Get-ChildItem (Join-Path $base "libraries\net\neoforged\neoforge") 
 if (-not $nfWinArgs) { throw "NeoForge server-base incomplete." }
 $nfArgsAt = "@" + (($nfWinArgs.FullName -replace [regex]::Escape($base), "").TrimStart('\','/') -replace '\\','/')
 
+. (Join-Path $BenchRoot "Resolve-NoisiumedJar.ps1")
 $sparkJar = Join-Path $jars "spark-1.10.124-neoforge.jar"
-$noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.14-neoforge-1.21.1.jar"
-if (-not (Test-Path $noisiumedJar)) {
-  $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.12-neoforge-1.21.1.jar"
-}
+$noisiumedJar = Resolve-NoisiumedJar -JarsDir $jars
 $fnJar = Join-Path $jars "zfastnoise-1.0.13+1.21.1+neoforge.jar"
+Write-Host "Noisiumed jar: $noisiumedJar" -ForegroundColor Cyan
 if (-not (Test-Path $sparkJar)) { throw "Missing spark jar" }
 if ($Candidate -eq "noisiumed" -and -not (Test-Path $noisiumedJar)) { throw "Missing noisiumed jar" }
 if ($Candidate -eq "fastnoise" -and -not (Test-Path $fnJar)) { throw "Missing Fast Noise jar: $fnJar" }

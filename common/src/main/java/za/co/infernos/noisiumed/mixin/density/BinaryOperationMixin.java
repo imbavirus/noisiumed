@@ -55,10 +55,14 @@ public abstract class BinaryOperationMixin implements DensityFunction {
 		int len = densities.length;
 		switch (this.type.ordinal()) {
 			case 0 -> {
-				double[] temp = DensityScratch.fillTemp(len);
-				this.argument2.fill(temp, applier);
-				for (int i = 0; i < len; i++) {
-					densities[i] += temp[i];
+				double[] temp = DensityScratch.acquireFillTemp(len);
+				try {
+					this.argument2.fill(temp, applier);
+					for (int i = 0; i < len; i++) {
+						densities[i] += temp[i];
+					}
+				} finally {
+					DensityScratch.releaseFillTemp();
 				}
 			}
 			case 1 -> {

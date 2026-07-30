@@ -4,13 +4,17 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.world.chunk.ChunkSection;
 import net.minecraft.world.chunk.PalettedContainer;
+import net.minecraft.util.collection.PaletteStorage;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * L1 section writer: direct palette {@code index} + {@code storage.set} during the noise loop
- * (no separate staging materialize pass). Re-reads container data after each {@code index}
- * so singular→array (and further) palette resizes stay valid — same fix as L0 redirect.
+ * L1 section writer: direct palette storage writes during the noise loop.
+ * <p>
+ * On empty (singular) sections, after the first palette growth settles on a 4-bit
+ * {@link PaletteStorage}, hot solid writes use FN-style row packing:
+ * {@code storage[(y&lt;&lt;4)|z] |= id &lt;&lt; (x&lt;&lt;2)} — only valid while cells are still 0
+ * (empty start). Falls back to {@code storage.set} when bits ≠ 4 or after palette resize.
  * <p>
  * Identity last-state cache avoids repeated palette scans on solid runs.
  */
@@ -28,6 +32,12 @@ public final class DirectSectionWriter {
 	private int lastId;
 	private int defaultId;
 	private boolean hasDefault;
+	private boolean defaultHasFluid;
+	private boolean defaultRandomTick;
+
+	/** 4-bit packed row storage from the live container (FN layout). */
+	private @Nullable long[] raw4;
+	private boolean fast4;
 
 	/** Per-section column occupancy: bit (z&lt;&lt;4)|x — for future surface/heightmap use. */
 	private final long[] columnBits = new long[4];
@@ -43,6 +53,10 @@ public final class DirectSectionWriter {
 		this.lastId = 0;
 		this.defaultId = 0;
 		this.hasDefault = false;
+		this.defaultHasFluid = false;
+		this.defaultRandomTick = false;
+		this.raw4 = null;
+		this.fast4 = false;
 		columnBits[0] = columnBits[1] = columnBits[2] = columnBits[3] = 0L;
 	}
 
@@ -57,6 +71,10 @@ public final class DirectSectionWriter {
 		this.lastId = 0;
 		this.defaultId = 0;
 		this.hasDefault = false;
+		this.defaultHasFluid = false;
+		this.defaultRandomTick = false;
+		this.raw4 = null;
+		this.fast4 = false;
 		columnBits[0] = columnBits[1] = columnBits[2] = columnBits[3] = 0L;
 	}
 
@@ -95,33 +113,68 @@ public final class DirectSectionWriter {
 		if (!hasDefault) {
 			defaultId = index(defaultBlock);
 			hasDefault = true;
+			defaultHasFluid = !defaultBlock.getFluidState().isEmpty();
+			defaultRandomTick = defaultBlock.hasRandomTicks();
 			lastState = defaultBlock;
 			lastId = defaultId;
 		}
-		writeId(x, y, z, defaultId, defaultBlock);
+		// Hot solid path: skip per-block fluid/randomTick queries (cached from first default).
+		writeIdCached(x, y, z, defaultId, defaultHasFluid, defaultRandomTick);
 	}
 
 	private int index(@NotNull BlockState state) {
 		//noinspection DataFlowIssue
 		PalettedContainer<BlockState> container = section.blockStateContainer;
-		return container.data.palette.index(state);
+		int id = container.data.palette.index(state);
+		// Palette growth may replace storage — re-probe fast path.
+		captureFast4(container);
+		return id;
+	}
+
+	private void captureFast4(@NotNull PalettedContainer<BlockState> container) {
+		PaletteStorage storage = container.data.storage();
+		if (storage.getElementBits() == 4) {
+			long[] data = storage.getData();
+			// 4 bits × 4096 cells = 2048 bytes = 256 longs (FN row packing).
+			if (data != null && data.length >= 256) {
+				this.raw4 = data;
+				this.fast4 = true;
+				return;
+			}
+		}
+		this.raw4 = null;
+		this.fast4 = false;
 	}
 
 	private void writeId(int x, int y, int z, int id, @NotNull BlockState state) {
+		writeIdCached(x, y, z, id, !state.getFluidState().isEmpty(), state.hasRandomTicks());
+	}
+
+	private void writeIdCached(int x, int y, int z, int id, boolean fluid, boolean randomTick) {
 		//noinspection DataFlowIssue
-		PalettedContainer<BlockState> container = section.blockStateContainer;
-		// Fresh data after possible resize inside palette.index:
-		var data = container.data;
-		int storageIndex = container.paletteProvider.computeIndex(x, y, z);
-		data.storage().set(storageIndex, id);
+		if (fast4 && raw4 != null && id >= 0 && id < 16) {
+			// Same packing as vanilla PackedIntegerArray(4,4096) for BLOCK_STATE index order:
+			// storageIndex = (y<<8)|(z<<4)|x → long row (y<<4)|z, nibble at x*4.
+			// OR is valid only while the nibble is still 0 (empty L1 start).
+			raw4[(y << 4) | z] |= ((long) id) << (x << 2);
+		} else {
+			PalettedContainer<BlockState> container = section.blockStateContainer;
+			var data = container.data;
+			int storageIndex = container.paletteProvider.computeIndex(x, y, z);
+			data.storage().set(storageIndex, id);
+			// set() may be used after a mid-section resize; keep fast probe honest.
+			if (fast4) {
+				captureFast4(container);
+			}
+		}
 
 		dirty = true;
 		writes++;
 		nonEmpty++;
-		if (!state.getFluidState().isEmpty()) {
+		if (fluid) {
 			nonEmptyFluid++;
 		}
-		if (state.hasRandomTicks()) {
+		if (randomTick) {
 			randomTickable++;
 		}
 		int bit = (z << 4) | x;

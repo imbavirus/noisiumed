@@ -60,9 +60,16 @@ On bare overworld L1, sampled timing shows roughly **~70% sampleBlockState vs ~3
 - L1 attaches **column bits** + **has-solid**; empty L1 chunks skip `buildSurface` without section scan  
 - L1 generator allowlist: `-Dnoisiumed.l1.generator.allowlist=fqcn1,fqcn2`
 
+## beta.16 notes
+
+- Nested `DensityScratch` temps (fix for Spec/Ap2 Add fill under deep trees).
+- Clamp → SpecDensity.
+- Deep CellCache/interpolator delegate specialize is **opt-in** (`-Dnoisiumed.density.deep=true`) — parity-sensitive.
+- Multi vs FN still ~tie; sample still dominates L1 (~69%).
+
 ## Next campaign
 
-See **[NOISECHUNK_DOMINATION.md](./NOISECHUNK_DOMINATION.md)** — sample path / BlockStateFiller / cell fillArray.
+See **[NOISECHUNK_DOMINATION.md](./NOISECHUNK_DOMINATION.md)** — sample path / BlockStateFiller / cell fillArray / deep specialize parity.
 
 ## Out of scope (still)
 

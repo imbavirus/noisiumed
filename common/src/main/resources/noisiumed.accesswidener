@@ -61,7 +61,13 @@ accessible field net/minecraft/world/gen/densityfunction/DensityFunctionTypes$Ra
 
 # NC-5: interpolator SpecDensity fill + monomorphic ore
 accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator delegate Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+mutable field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator delegate Lnet/minecraft/world/gen/densityfunction/DensityFunction;
 accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$DensityInterpolator field_34622 Lnet/minecraft/world/gen/chunk/ChunkNoiseSampler;
+
+# beta.16: rewrite CellCache / interpolator delegates after specialize
+accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler$CellCache delegate Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+mutable field net/minecraft/world/gen/chunk/ChunkNoiseSampler$CellCache delegate Lnet/minecraft/world/gen/densityfunction/DensityFunction;
+accessible class net/minecraft/world/gen/densityfunction/DensityFunctionTypes$Clamp
 accessible field net/minecraft/world/gen/chunk/ChunkNoiseSampler isSamplingForCaches Z
 accessible field net/minecraft/world/gen/OreVeinSampler$VeinType ore Lnet/minecraft/block/BlockState;
 accessible field net/minecraft/world/gen/OreVeinSampler$VeinType rawOreBlock Lnet/minecraft/block/BlockState;

@@ -119,3 +119,17 @@ run/
 
 # Publish output
 publish_output*.txt
+
+# Bench harness outputs (do not commit spark bins / run trees)
+bench/results/*.bin
+bench/results/*-console.log
+bench/results/*-latest.log
+bench/results/*-summary.txt
+bench/results/multi-run*
+bench/results/parity-*
+bench/results/refmap-extract*/
+bench/__pycache__/
+bench/run-*/
+bench/server-base/
+bench/jars/*.jar
+

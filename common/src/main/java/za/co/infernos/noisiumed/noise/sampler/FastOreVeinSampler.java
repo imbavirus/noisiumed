@@ -28,6 +28,26 @@ public final class FastOreVeinSampler implements ChunkNoiseSampler.BlockStateSam
 	private static final float VEIN_GAP_THRESHOLD = -0.3f;
 	private static final double MAX_DENSITY_INTRUSION = 20.0d;
 
+	/** Union of copper/iron vein Y bands — outside this, sample is always null (no DF work). */
+	private static final int VEIN_Y_MIN;
+	private static final int VEIN_Y_MAX;
+
+	static {
+		int min = Integer.MAX_VALUE;
+		int max = Integer.MIN_VALUE;
+		for (OreVeinSampler.VeinType type : OreVeinSampler.VeinType.values()) {
+			min = Math.min(min, type.minY);
+			max = Math.max(max, type.maxY);
+		}
+		VEIN_Y_MIN = min;
+		VEIN_Y_MAX = max;
+	}
+
+	/** NC-3 solid path: skip secondary.sample when Y is outside every vein band. */
+	public static boolean mayHaveVeinAtY(int blockY) {
+		return blockY >= VEIN_Y_MIN && blockY <= VEIN_Y_MAX;
+	}
+
 	private final DensityFunction veinToggle;
 	private final DensityFunction veinRidged;
 	private final DensityFunction veinGap;
@@ -48,8 +68,12 @@ public final class FastOreVeinSampler implements ChunkNoiseSampler.BlockStateSam
 	@Override
 	@Nullable
 	public BlockState sample(DensityFunction.NoisePos pos) {
-		double toggle = this.veinToggle.sample(pos);
 		int blockY = pos.blockY();
+		// Wall: skip veinToggle/ridged/gap when Y is outside every vein band (parity: null).
+		if (blockY < VEIN_Y_MIN || blockY > VEIN_Y_MAX) {
+			return null;
+		}
+		double toggle = this.veinToggle.sample(pos);
 		OreVeinSampler.VeinType veinType = toggle > 0.0
 				? OreVeinSampler.VeinType.COPPER
 				: OreVeinSampler.VeinType.IRON;
