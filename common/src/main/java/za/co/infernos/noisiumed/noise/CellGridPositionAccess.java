@@ -16,4 +16,12 @@ public interface CellGridPositionAccess {
 
 	/** Set cellBlockZ + bump sampleUniqueIndex (CacheOnce / pos identity). */
 	void noisiumed$positionZ(int blockZ);
+
+	/**
+	 * W1: after {@code onSampledCellCorners}, true if every primary density in the cell is &gt; 0
+	 * (safe solid-only materialize; skip aquifer per block).
+	 */
+	default boolean noisiumed$cellAllSolid() {
+		return false;
+	}
 }

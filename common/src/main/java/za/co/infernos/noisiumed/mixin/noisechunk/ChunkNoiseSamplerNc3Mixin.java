@@ -234,6 +234,27 @@ public abstract class ChunkNoiseSamplerNc3Mixin implements CellGridPositionAcces
 		return this.noisiumed$cellGridSample;
 	}
 
+	/**
+	 * W1 speculative solid cell: all primary densities strictly &gt; 0 ⇒ vanilla solid early-out
+	 * for every block (aquifer returns null). Ore secondary still applied by caller.
+	 */
+	@Override
+	public boolean noisiumed$cellAllSolid() {
+		if (!this.noisiumed$cellGridSample) {
+			return false;
+		}
+		final double[] cache = this.noisiumed$primaryDensityCache;
+		if (cache == null) {
+			return false;
+		}
+		for (double d : cache) {
+			if (d <= 0.0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	@Override
 	public void noisiumed$positionY(int blockY) {
 		this.cellBlockY = blockY - this.startBlockY;

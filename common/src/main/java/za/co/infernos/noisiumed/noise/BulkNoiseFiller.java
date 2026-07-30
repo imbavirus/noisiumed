@@ -22,6 +22,14 @@ public final class BulkNoiseFiller {
 	/** When true, WG heightmaps are filled after surface (L2) instead of immediately after noise. */
 	public static volatile boolean DEFER_HEIGHTMAPS_UNTIL_SURFACE = true;
 
+	/**
+	 * W1 isolation: when NC-3 cell is entirely solid (all densities &gt; 0), skip per-block
+	 * sampleBlockState and write default (+ ore only in vein Y). Default on for exp branch.
+	 * Disable: {@code -Dnoisiumed.exp.w1.spec.cells=false}
+	 */
+	public static final boolean SPEC_SOLID_CELLS = !"false".equalsIgnoreCase(
+			System.getProperty("noisiumed.exp.w1.spec.cells", "true"));
+
 	private BulkNoiseFiller() {}
 
 	/**
@@ -95,6 +103,46 @@ public final class BulkNoiseFiller {
 					for (int cellY = cellHeight - 1; cellY >= 0; cellY--) {
 						chunkNoiseSampler.onSampledCellCorners(cellY, cellZ);
 						final int cellBaseY = (minimumCellY + cellY) * verticalCellBlockCount;
+
+						// W1: entire cell solid → no aquifer; write default (+ ore in vein band only).
+						if (SPEC_SOLID_CELLS && cellGrid != null && cellGrid.noisiumed$cellAllSolid()) {
+							for (int verticalCellBlock = verticalCellBlockCount - 1; verticalCellBlock >= 0; verticalCellBlock--) {
+								int blockY = cellBaseY + verticalCellBlock;
+								int blockYInSection = blockY & 15;
+								int cy = (blockY - minY) >> 4;
+								if (cy < 0 || cy >= sectionCount) {
+									continue;
+								}
+								DirectSectionWriter writer = pool.sectionWriters[cy];
+								if (writer == null || !writer.isBound()) {
+									writer = acquireWriter(pool, cy, sections[cy]);
+								}
+								final boolean oreY = za.co.infernos.noisiumed.noise.sampler.FastOreVeinSampler.mayHaveVeinAtY(blockY);
+								for (int cellBlockX = 0; cellBlockX < horizontalCellBlockCount; cellBlockX++) {
+									int blockX = baseX + cellBlockX;
+									int blockXInSection = blockX & 15;
+									for (int cellBlockZ = 0; cellBlockZ < horizontalCellBlockCount; cellBlockZ++) {
+										int blockZ = baseZ + cellBlockZ;
+										int blockZInSection = blockZ & 15;
+										if (oreY) {
+											cellGrid.noisiumed$positionY(blockY);
+											cellGrid.noisiumed$positionX(blockX);
+											cellGrid.noisiumed$positionZ(blockZ);
+											BlockState ore = samplerAccess.noisiumed$sampleBlockState();
+											// sampleBlockState on all-solid still runs solid path + secondary
+											if (ore != null && !ore.isAir() && ore != defaultBlockState) {
+												writer.setBlockState(blockXInSection, blockYInSection, blockZInSection, ore);
+											} else {
+												writer.setDefaultBlock(blockXInSection, blockYInSection, blockZInSection, defaultBlockState);
+											}
+										} else {
+											writer.setDefaultBlock(blockXInSection, blockYInSection, blockZInSection, defaultBlockState);
+										}
+									}
+								}
+							}
+							continue;
+						}
 
 						for (int verticalCellBlock = verticalCellBlockCount - 1; verticalCellBlock >= 0; verticalCellBlock--) {
 							int blockY = cellBaseY + verticalCellBlock;
