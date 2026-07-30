@@ -1,36 +1,34 @@
 ﻿# Multi-run Spark worldgen A/B (honest scoreboard)
 
-Date: 2026-07-30T18:29:16.6189673+02:00
-Runs=5 seed=12345 radiusChunks=7 profileSeconds=100
+Date: 2026-07-30T20:53:15.2722696+02:00
+Runs=3 seed=12345 radiusChunks=7 profileSeconds=100
 SpikeFactor=1.5 (values > factor x median flagged / dropped from quiet set)
-Jar: `noisiumed-4.0.0-beta.16.5-neoforge-1.21.1.jar` vs zfastnoise 1.0.13
+Jar: `noisiumed-4.0.0-beta.16.5-w1-neoforge-1.21.1.jar` vs zfastnoise 1.0.13
 
 ## Per-run wall_forceload_ms
 
 | Run | Noisiumed | Fast Noise | Noisiumed Spark | FN Spark |
 |-----|-----------|------------|-----------------|----------|
-| 1 | 42527 | 53723 | https://spark.lucko.me/czqQIlZldo | https://spark.lucko.me/lWBFgncv2c |
-| 2 | 40632 | 45816 | https://spark.lucko.me/rQQrpqyPDH | https://spark.lucko.me/pQe0NWNBq8 |
-| 3 | 40080 | 53944 | https://spark.lucko.me/kMT5pZmpyJ | https://spark.lucko.me/XWFAuQRA9J |
-| 4 | 44182 | 54384 | https://spark.lucko.me/CLfNoBOSuW | https://spark.lucko.me/OJZRzKhHOV |
-| 5 | 54083 | 48174 | https://spark.lucko.me/2P2gGBxLEi | https://spark.lucko.me/KlNHWgtyB1 |
+| 1 | FAIL | FAIL | | |
+| 2 | 65654 | 54823 | https://spark.lucko.me/ZKhcJvdN4h | https://spark.lucko.me/Uhc0qThg8f |
+| 3 | 40509 | 44070 | https://spark.lucko.me/q3qNue01Im | https://spark.lucko.me/JhFjub6yP5 |
 
 ## Wall forceload summary
 
 | Metric | Noisiumed | Fast Noise | Delta (N-F) | % faster (N vs F) |
 |--------|-----------|------------|-------------|-------------------|
-| **mean** | 44301 | 51208 | -6907 | 13,5% |
-| **median** | 42527 | 53723 | -11196 | 20,8% |
-| min | 40080 | 45816 | | |
-| max | 54083 | 54384 | | |
-| stdev | 5704 | 3943 | | |
-| **quiet mean** (no spikes) | 44301 | 51208 | -6907 | 13,5% |
-| **quiet median** | 42527 | 53723 | -11196 | 20,8% |
-| wall_boot_ms avg | 26254 | 27713 | | |
-| wall_total_ms avg | 184871 | 192717 | | |
-| l1_avg_us avg | 69869 | n/a | | |
-| sample_pct avg | 71,6 | n/a | | |
-| write_pct avg | 27,4 | n/a | | |
+| **mean** | 53082 | 49447 | 3635 | -7,4% |
+| **median** | 53082 | 49447 | 3635 | -7,4% |
+| min | 40509 | 44070 | | |
+| max | 65654 | 54823 | | |
+| stdev | 17780 | 7604 | | |
+| **quiet mean** (no spikes) | 53082 | 49447 | 3635 | -7,4% |
+| **quiet median** | 53082 | 49447 | 3635 | -7,4% |
+| wall_boot_ms avg | 31360 | 26689 | | |
+| wall_total_ms avg | 197463 | 189546 | | |
+| l1_avg_us avg | 81823 | n/a | | |
+| sample_pct avg | 94,0 | n/a | | |
+| write_pct avg | 5,0 | n/a | | |
 
 Positive **% faster** means Noisiumed forceload is lower (better). **Quiet** drops runs > SpikeFactor x median.
 
@@ -40,14 +38,14 @@ Positive **% faster** means Noisiumed forceload is lower (better). **Quiet** dro
 - Fast Noise: none
 
 ## Successful forceload samples
-- Noisiumed n=5: 42527, 40632, 40080, 44182, 54083
-- Fast Noise n=5: 53723, 45816, 53944, 54384, 48174
-- Quiet N n=5: 42527, 40632, 40080, 44182, 54083
-- Quiet F n=5: 53723, 45816, 53944, 54384, 48174
+- Noisiumed n=2: 65654, 40509
+- Fast Noise n=2: 54823, 44070
+- Quiet N n=2: 65654, 40509
+- Quiet F n=2: 54823, 44070
 
 ## Dominance gate (plan)
 
-- Quiet median â‰¥10% faster: **PASS** (20,8%)
-- Multi mean â‰¥5% faster: **PASS** (13,5%)
-- Combined dominance gate: **PASS**
+- Quiet median â‰¥10% faster: **FAIL** (-7,4%)
+- Multi mean â‰¥5% faster: **FAIL** (-7,4%)
+- Combined dominance gate: **FAIL**
 

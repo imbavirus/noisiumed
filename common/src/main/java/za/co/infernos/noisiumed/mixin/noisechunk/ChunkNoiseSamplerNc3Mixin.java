@@ -235,6 +235,54 @@ public abstract class ChunkNoiseSamplerNc3Mixin implements CellGridPositionAcces
 	}
 
 	@Override
+	public double[] noisiumed$primaryDensityCache() {
+		return this.noisiumed$primaryDensityCache;
+	}
+
+	@Override
+	public int noisiumed$cellW() {
+		return this.noisiumed$cellW;
+	}
+
+	@Override
+	public int noisiumed$cellH() {
+		return this.noisiumed$cellH;
+	}
+
+	@Override
+	@Nullable
+	public BlockState noisiumed$materializeFromDensity(double density) {
+		final ChunkNoiseSampler self = (ChunkNoiseSampler) (Object) this;
+		final ChunkNoiseSampler.BlockStateSampler secondary = this.noisiumed$secondarySampler;
+		if (density > 0.0) {
+			AquiferImplAccess aq = this.noisiumed$aquiferAccess;
+			if (aq != null) {
+				aq.noisiumed$setNeedsFluidTick(false);
+			}
+			if (secondary == null) {
+				return null;
+			}
+			int blockY = this.startBlockY + this.cellBlockY;
+			if (!FastOreVeinSampler.mayHaveVeinAtY(blockY)) {
+				return null;
+			}
+			return secondary.sample(self);
+		}
+		BlockState state = this.aquiferSampler.apply(self, density);
+		if (state != null) {
+			return state;
+		}
+		if (secondary == null) {
+			return null;
+		}
+		int blockY = this.startBlockY + this.cellBlockY;
+		if (!FastOreVeinSampler.mayHaveVeinAtY(blockY)) {
+			return null;
+		}
+		return secondary.sample(self);
+	}
+
+	@Override
 	public void noisiumed$positionY(int blockY) {
 		this.cellBlockY = blockY - this.startBlockY;
 	}

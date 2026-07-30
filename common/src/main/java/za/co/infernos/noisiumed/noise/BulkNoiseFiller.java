@@ -22,6 +22,13 @@ public final class BulkNoiseFiller {
 	/** When true, WG heightmaps are filled after surface (L2) instead of immediately after noise. */
 	public static volatile boolean DEFER_HEIGHTMAPS_UNTIL_SURFACE = true;
 
+	/**
+	 * W2 isolation: cell-batch materialize from primary density cache (no sampleBlockState invoker).
+	 * Default on for this experiment branch. Disable: {@code -Dnoisiumed.exp.w2.cell.batch=false}
+	 */
+	public static final boolean CELL_BATCH = !"false".equalsIgnoreCase(
+			System.getProperty("noisiumed.exp.w2.cell.batch", "true"));
+
 	private BulkNoiseFiller() {}
 
 	/**
@@ -96,6 +103,17 @@ public final class BulkNoiseFiller {
 						chunkNoiseSampler.onSampledCellCorners(cellY, cellZ);
 						final int cellBaseY = (minimumCellY + cellY) * verticalCellBlockCount;
 
+						// W2: batch from primary density cache when available.
+						final double[] densityCache = CELL_BATCH && cellGrid != null
+								? cellGrid.noisiumed$primaryDensityCache()
+								: null;
+						final int densW = densityCache != null ? cellGrid.noisiumed$cellW() : 0;
+						final int densH = densityCache != null ? cellGrid.noisiumed$cellH() : 0;
+						final int densStrideY = densW * densW;
+						final boolean batch = densityCache != null && densW == horizontalCellBlockCount
+								&& densH == verticalCellBlockCount
+								&& densityCache.length == densW * densW * densH;
+
 						for (int verticalCellBlock = verticalCellBlockCount - 1; verticalCellBlock >= 0; verticalCellBlock--) {
 							int blockY = cellBaseY + verticalCellBlock;
 							int blockYInSection = blockY & 15;
@@ -115,6 +133,10 @@ public final class BulkNoiseFiller {
 								writer = acquireWriter(pool, cy, sections[cy]);
 							}
 
+							// Cache layout: (h-1-j)*w*w + i*w + k with j = cellBlockY.
+							final int cellJ = verticalCellBlock;
+							final int densYBase = batch ? (densH - 1 - cellJ) * densStrideY : 0;
+
 							for (int cellBlockX = 0; cellBlockX < horizontalCellBlockCount; cellBlockX++) {
 								int blockX = baseX + cellBlockX;
 								int blockXInSection = blockX & 15;
@@ -123,6 +145,7 @@ public final class BulkNoiseFiller {
 								} else {
 									chunkNoiseSampler.interpolateX(blockX, horizDeltas[cellBlockX]);
 								}
+								final int densXBase = batch ? densYBase + cellBlockX * densW : 0;
 
 								for (int cellBlockZ = 0; cellBlockZ < horizontalCellBlockCount; cellBlockZ++) {
 									int blockZ = baseZ + cellBlockZ;
@@ -136,8 +159,16 @@ public final class BulkNoiseFiller {
 									BlockState state;
 									if (detailTiming) {
 										long tS = System.nanoTime();
-										state = samplerAccess.noisiumed$sampleBlockState();
+										if (batch) {
+											state = cellGrid.noisiumed$materializeFromDensity(
+													densityCache[densXBase + cellBlockZ]);
+										} else {
+											state = samplerAccess.noisiumed$sampleBlockState();
+										}
 										sampleNs += System.nanoTime() - tS;
+									} else if (batch) {
+										state = cellGrid.noisiumed$materializeFromDensity(
+												densityCache[densXBase + cellBlockZ]);
 									} else {
 										state = samplerAccess.noisiumed$sampleBlockState();
 									}
