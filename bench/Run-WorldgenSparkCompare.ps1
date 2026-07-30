@@ -129,9 +129,9 @@ function Run-SparkWorldgen {
   param([string]$Label, [string]$ServerDir, [int]$Port, [int]$RPort)
 
   $script:RconPort = $RPort
-  $logFile = Join-Path $results "$Label-console.log"
   $summaryFile = Join-Path $results "$Label-summary.txt"
-  if (Test-Path $logFile) { Remove-Item $logFile -Force }
+  # Unique log path: a leftover redirect lock on Label-console.log must not fail the multi.
+  $logFile = Join-Path $results ("{0}-console-{1}.log" -f $Label, (Get-Date -Format "yyyyMMdd-HHmmss"))
 
   $wall = [ordered]@{
     t_start = Get-Date
