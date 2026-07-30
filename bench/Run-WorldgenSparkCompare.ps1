@@ -34,7 +34,28 @@ function Invoke-Rcon([string]$Command) {
 function Prepare-ServerDir {
   param([string]$Name, [string[]]$ModJars, [int]$Port, [int]$RPort)
   $dir = Join-Path $BenchRoot "run-$Name"
-  if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+  if (Test-Path $dir) {
+    # Only stop java under this run dir (never other MC servers), then delete with retries.
+    $dirEsc = [regex]::Escape($dir)
+    Get-CimInstance Win32_Process -Filter "Name='java.exe'" -EA SilentlyContinue |
+      Where-Object { $_.CommandLine -and $_.CommandLine -match $dirEsc } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue }
+    Start-Sleep -Milliseconds 500
+    for ($attempt = 0; $attempt -lt 8; $attempt++) {
+      try {
+        Remove-Item $dir -Recurse -Force -ErrorAction Stop
+        break
+      } catch {
+        Start-Sleep -Seconds 1
+        if ($attempt -eq 7) {
+          # Leave world/logs if locked; wipe mods so the right jar is used.
+          $mods = Join-Path $dir "mods"
+          if (Test-Path $mods) { Get-ChildItem $mods -Filter "*.jar" -EA SilentlyContinue | Remove-Item -Force -EA SilentlyContinue }
+          Write-Host "WARN: could not fully remove $dir ($($_.Exception.Message)); reusing tree" -ForegroundColor Yellow
+        }
+      }
+    }
+  }
   New-Item -ItemType Directory -Force -Path $dir, (Join-Path $dir "mods") | Out-Null
 
   $libLink = Join-Path $dir "libraries"
@@ -221,7 +242,7 @@ function Run-SparkWorldgen {
   while (-not $p.HasExited -and (Get-Date) -lt $stopDl) { Start-Sleep -Milliseconds 400 }
   if (-not $p.HasExited) {
     Stop-Process -Id $p.Id -Force -EA SilentlyContinue
-    # Only children/siblings under this label's server dir — never other MC servers.
+    # Only children/siblings under this label's server dir ÔÇö never other MC servers.
     $dirEsc = [regex]::Escape($ServerDir)
     Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" -EA SilentlyContinue |
       Where-Object { $_.CommandLine -and $_.CommandLine -match $dirEsc } |

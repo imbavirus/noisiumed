@@ -6,11 +6,26 @@ package za.co.infernos.noisiumed.density;
  * Nested {@code fill} (e.g. Spec Add inside Spec Add during CellCache bulk fill) must not
  * share one temp array — that clobbers intermediate results and destroys golden parity.
  * Depth-stacked buffers fix that.
+ * <p>
+ * W5: per-depth length buckets for common fill sizes so we do not thrash realloc when
+ * nested fills alternate between a few fixed lengths (cell grid / section fills).
  */
 public final class DensityScratch {
 	private static final int MAX_DEPTH = 32;
 
+	/**
+	 * Common exact lengths seen in noise cell / interpolator fills (must be exact —
+	 * {@code DensityFunction#fill} uses {@code densities.length}).
+	 */
+	private static final int[] BUCKET_LENGTHS = {
+			4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
+	};
+
 	private static final ThreadLocal<DepthState> STATE = ThreadLocal.withInitial(DepthState::new);
+
+	/** W5 default on for this experiment. Disable: {@code -Dnoisiumed.exp.w5.arena=false} */
+	public static final boolean ARENA_BUCKETS = !"false".equalsIgnoreCase(
+			System.getProperty("noisiumed.exp.w5.arena", "true"));
 
 	private DensityScratch() {}
 
@@ -22,14 +37,26 @@ public final class DensityScratch {
 		DepthState s = STATE.get();
 		int d = s.depth;
 		if (d >= MAX_DEPTH) {
-			// Fallback: heap alloc (should never hit for vanilla DF depth)
 			return new double[length];
 		}
-		double[][] stack = s.stack;
-		double[] buf = stack[d];
+		double[] buf;
+		if (ARENA_BUCKETS) {
+			int bi = bucketIndex(length);
+			if (bi >= 0) {
+				buf = s.buckets[d][bi];
+				if (buf == null) {
+					buf = new double[length];
+					s.buckets[d][bi] = buf;
+				}
+				s.stack[d] = buf;
+				s.depth = d + 1;
+				return buf;
+			}
+		}
+		buf = s.stack[d];
 		if (buf == null || buf.length != length) {
 			buf = new double[length];
-			stack[d] = buf;
+			s.stack[d] = buf;
 		}
 		s.depth = d + 1;
 		return buf;
@@ -45,12 +72,21 @@ public final class DensityScratch {
 
 	/**
 	 * @deprecated Use {@link #acquireFillTemp(int)} + {@link #releaseFillTemp()} for nested fills.
-	 * Kept for call sites that cannot nest (single level only).
 	 */
 	@Deprecated
 	public static double[] fillTemp(int length) {
 		DepthState s = STATE.get();
-		// Use slot 0 without bumping depth — unsafe if nested; prefer acquire/release.
+		if (ARENA_BUCKETS) {
+			int bi = bucketIndex(length);
+			if (bi >= 0) {
+				double[] buf = s.buckets[0][bi];
+				if (buf == null) {
+					buf = new double[length];
+					s.buckets[0][bi] = buf;
+				}
+				return buf;
+			}
+		}
 		double[] buf = s.stack[0];
 		if (buf == null || buf.length != length) {
 			buf = new double[length];
@@ -59,8 +95,19 @@ public final class DensityScratch {
 		return buf;
 	}
 
+	private static int bucketIndex(int length) {
+		for (int i = 0; i < BUCKET_LENGTHS.length; i++) {
+			if (BUCKET_LENGTHS[i] == length) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
 	private static final class DepthState {
 		final double[][] stack = new double[MAX_DEPTH][];
+		/** [depth][bucketIndex] exact-length pooled arrays. */
+		final double[][][] buckets = new double[MAX_DEPTH][BUCKET_LENGTHS.length][];
 		int depth;
 	}
 }
