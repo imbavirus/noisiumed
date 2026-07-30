@@ -38,7 +38,7 @@ if (-not $nfWinArgs) { throw "NeoForge server-base incomplete." }
 $nfArgsAt = "@" + (($nfWinArgs.FullName -replace [regex]::Escape($base), "").TrimStart('\','/') -replace '\\','/')
 
 $sparkJar = Join-Path $jars "spark-1.10.124-neoforge.jar"
-$noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.13-neoforge-1.21.1.jar"
+$noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.14-neoforge-1.21.1.jar"
 if (-not (Test-Path $noisiumedJar)) {
   $noisiumedJar = Join-Path $jars "noisiumed-4.0.0-beta.12-neoforge-1.21.1.jar"
 }

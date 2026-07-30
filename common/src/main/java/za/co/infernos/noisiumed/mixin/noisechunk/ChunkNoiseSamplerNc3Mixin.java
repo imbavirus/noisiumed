@@ -57,9 +57,13 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 	@Shadow
 	private int cellBlockZ;
 
-	/** Last CACHE_ALL_IN_CELL wrap result (CellCache). */
+	/** Last CACHE_ALL_IN_CELL wrap result (CellCache), if uniquely identified. */
 	@Unique
 	private DensityFunction noisiumed$capturedCellDensity;
+
+	/** How many CACHE_ALL_IN_CELL wraps we saw; >1 means capture is ambiguous — refuse NC-3. */
+	@Unique
+	private int noisiumed$cellCacheWrapCount;
 
 	@Unique
 	private double[] noisiumed$primaryDensityCache;
@@ -72,7 +76,8 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 
 	/**
 	 * Track CellCache instances as the router / finalDensity graph is wrapped.
-	 * The last CACHE_ALL_IN_CELL during construction is the block-state primary density.
+	 * Only safe when exactly one CACHE_ALL_IN_CELL exists for this NoiseChunk
+	 * (otherwise "last capture" can be the wrong density branch).
 	 */
 	@Inject(method = "getActualDensityFunctionImpl", at = @At("RETURN"))
 	private void noisiumed$captureCellCache(
@@ -81,6 +86,7 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 	) {
 		if (function instanceof DensityFunctionTypes.Wrapping wrapping
 				&& wrapping.type() == DensityFunctionTypes.Wrapping.Type.CACHE_ALL_IN_CELL) {
+			this.noisiumed$cellCacheWrapCount++;
 			this.noisiumed$capturedCellDensity = cir.getReturnValue();
 		}
 	}
@@ -88,6 +94,10 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 	@Inject(method = "<init>", at = @At("RETURN"))
 	private void noisiumed$nc3WireCellGrid(CallbackInfo ci) {
 		if (!NoisiumedConfig.cellDensityGrid()) {
+			return;
+		}
+		// Ambiguous multi-cache graphs: fall back to vanilla sampleBlockState (accuracy first).
+		if (this.noisiumed$cellCacheWrapCount != 1) {
 			return;
 		}
 		DensityFunction cell = this.noisiumed$capturedCellDensity;
@@ -111,6 +121,7 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 		if (sampler instanceof FastDualBlockSampler dual) {
 			this.noisiumed$secondarySampler = dual.second();
 		} else if (sampler instanceof FastTripleBlockSampler) {
+			// Triple chains are rare and not modeled; stay on vanilla path.
 			this.noisiumed$primaryDensityCache = null;
 			return;
 		} else if (sampler instanceof FastSingleBlockSampler) {
@@ -144,8 +155,12 @@ public abstract class ChunkNoiseSamplerNc3Mixin {
 			final int i = this.cellBlockX;
 			final int j = this.cellBlockY;
 			final int k = this.cellBlockZ;
+			// Vanilla CellCache falls back to delegate.sample when indices are OOB.
+			if (i < 0 || j < 0 || k < 0 || i >= w || j >= h || k >= w) {
+				return this.blockStateSampler.sample((ChunkNoiseSampler) (Object) this);
+			}
 			final double[] cache = this.noisiumed$primaryDensityCache;
-			// Same layout as CacheAllInCell / fillAllDirectly (y high→low, then x, then z).
+			// Same layout as CacheAllInCell.sample / fillAllDirectly (y high→low, then x, then z).
 			final double density = cache[((h - 1 - j) * w + i) * w + k];
 			final ChunkNoiseSampler self = (ChunkNoiseSampler) (Object) this;
 

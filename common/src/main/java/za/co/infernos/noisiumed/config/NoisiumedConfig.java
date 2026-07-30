@@ -24,21 +24,23 @@ public final class NoisiumedConfig {
 	private static final Set<String> L1_GENERATOR_ALLOWLIST = parseAllowlist();
 
 	/**
-	 * NC-3: sampleBlockState reads primary density from CellCache array (same as vanilla
-	 * CacheAllInCell) instead of re-entering density.sample. Disable with
-	 * {@code -Dnoisiumed.cell.density.grid=false}.
+	 * NC-3: sampleBlockState reads primary density from CellCache array when exactly one
+	 * CACHE_ALL_IN_CELL wrap exists for the NoiseChunk. Default <strong>off</strong> for
+	 * accuracy (final density is often Interpolated; reading the cell grid skips lerp).
+	 * Enable: {@code -Dnoisiumed.cell.density.grid=true}.
 	 */
-	private static final boolean CELL_DENSITY_GRID = parseBool("noisiumed.cell.density.grid", "NOISIUMED_CELL_DENSITY_GRID", true);
+	private static final boolean CELL_DENSITY_GRID = parseBool(
+			"noisiumed.cell.density.grid", "NOISIUMED_CELL_DENSITY_GRID", false);
 
 	/**
-	 * NC-5 monomorphic ore sampler. Default <strong>off</strong> until golden hash PASS
-	 * (bisect: largest single parity delta). Enable: {@code -Dnoisiumed.fast.ore=true}.
+	 * NC-5 monomorphic ore sampler (no re-specialize of wrapped vein DFs). Default on;
+	 * disable with {@code -Dnoisiumed.fast.ore=false}.
 	 */
-	private static final boolean FAST_ORE = parseBool("noisiumed.fast.ore", "NOISIUMED_FAST_ORE", false);
+	private static final boolean FAST_ORE = parseBool("noisiumed.fast.ore", "NOISIUMED_FAST_ORE", true);
 
 	/**
-	 * Specialize aquifer density nodes (barrier/floodedness/spread/type/erosion/depth).
-	 * Default <strong>off</strong> until golden hash PASS. Enable:
+	 * Specialize aquifer density nodes. Default <strong>off</strong> — those graphs are not
+	 * always pure arithmetic (can change open-fluid results). Enable:
 	 * {@code -Dnoisiumed.aquifer.specialize=true}.
 	 */
 	private static final boolean AQUIFER_SPECIALIZE = parseBool(
