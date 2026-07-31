@@ -93,10 +93,10 @@ Date: 2026-07-30. Champion: `champion-16.5` / `4.0.0-beta.16.5`.
 
 ### Immediate next
 
-1. True-cold multi ×5 **W6 only** (and optional champ control) when machine is quiet.  
-2. If W6 still FLAG → design W9 turbo as **champion + W6 only**.  
-3. Do not stack W1/W4 without rework.  
-4. Optional: aquifers-off multi for W3; real heightmap prime for W8.
+1. ~~W6v2 multi~~ → **done 2026-07-31**: thrashy; **no ship**. Need **interleaved** champ↔w6 cold multi (order bias killed the follow-up).  
+2. One bench run with `-Dnoisiumed.oreStats=true` to print gapSkipRate (funnel).  
+3. If cold interleaved still FLAG → design W9 turbo as **champion + W6 only**.  
+4. Do not stack W1/W4 without rework.
 
 ---
 

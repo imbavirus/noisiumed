@@ -64,13 +64,39 @@ Reports: `bench/results/MULTI_COMPARE_REPORT_{champion,w4,w1,w6}.md`. Harness co
 
 ---
 
+## W6v2 follow-up 2026-07-31 (branch `exp/w6-v2`)
+
+**Code:** same parity-safe ore-chance→gap short-circuit + opt-in `-Dnoisiumed.oreStats=true` funnel (`FastOreVeinSampler`). Jar `4.0.0-beta.16.5-w6v2`. Commit `ef9acd9`.
+
+**Same-session multi ×5** (champ first, then w6v2):
+
+| Suite | Quiet med N | Quiet med FN | % N vs FN | Δ% N vs session champ |
+|-------|-------------|--------------|-----------|------------------------|
+| CONTROL (`w6v2ctrl`) | **52251** | 54021 | **+3.3%** | 0 |
+| W6v2 | **65391** | 63307 | **−3.3%** | **−25%** (slower abs) |
+
+Samples N: champ `43953…59062` (med 52251); w6v2 `58461…66533` (med 65391). FN also drifted +17% quiet (54021→63307) — **thermal/session thrash**, not a clean isolation signal.
+
+### Decision
+
+| Item | Verdict |
+|------|---------|
+| W6v2 wall vs champ (this session) | **NO ADOPT** — absolute + relative-to-FN both worse after heat soak |
+| W6 code quality | Still **parity-safe free micro**; keep as FLAG candidate |
+| oreStats | Usable tooling; default off (static final) |
+| Next | Cold **interleaved** champ/w6v2 (or A/B per run) to kill order bias; enable oreStats once for funnel % |
+
+Reports: `MULTI_COMPARE_REPORT_w6v2ctrl.md`, `MULTI_COMPARE_REPORT_w6v2.md`.
+
+---
+
 ## Full isolation table (triage history + rescore override)
 
 | Exp | Branch | Quiet med (N) | Δ% vs champ | vs FN (session) | Decision | Notes |
 |-----|--------|---------------|-------------|-----------------|----------|--------|
 | **W4** | `exp/w4-pregrow-4bit` | rescore **55306** | **−4.4%** sess | +0.1% | **REJECT** rescore | Prior cold ×3 FLAG (+2.9%) superseded by ×5 same-session. |
 | **W1** | `exp/w1-spec-cells` | rescore **55852** | **−5.4%** sess | −0.5% | **REJECT** this impl | Clean multi; no wall win. Rework needs secondary-only ore + counters. |
-| **W6** | `exp/w6-secondary-lut` | rescore **45242** | **+14.6%** sess | −2.4% | **FLAG** | Best rescore N; re-confirm cold before stack into turbo. |
+| **W6** | `exp/w6-secondary-lut` / `exp/w6-v2` | rescore **45242** / w6v2 **65391** | **+14.6%** then **−25%** thrash | −2.4% / −3.3% | **FLAG, no ship yet** | Prior rescore promising; w6v2 same-session follow-up thermal — need interleaved cold. |
 | **W2** | `exp/w2-cell-batch` | 54458 | −28% cold | −1.7% | **REJECT** (hot) | Density-cache materialize. No proven gain. |
 | **W3** | `exp/w3-path-moe` | 52948 | −25% cold | bad | **REJECT** default OW | Fluid-tick MoE no-op with aquifers on. |
 | **W5** | `exp/w5-arena-scratch` | 46833 | −10% cold | ~0–13%* | **REJECT** vs control | Scratch buckets. FN spike distorted session. |
